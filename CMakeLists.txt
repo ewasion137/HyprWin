@@ -4,7 +4,7 @@ project(HyprWin VERSION 0.1 LANGUAGES CXX C) # Added C for Lua compilation
 set(CMAKE_CXX_STANDARD 20)
 
 # Include paths
-include_directories(third_party/sol third_party/lua)
+include_directories(third_party third_party/lua)
 
 # Create a static library for Lua from its source files
 file(GLOB ALL_LUA_SOURCES "third_party/lua/*.c")
