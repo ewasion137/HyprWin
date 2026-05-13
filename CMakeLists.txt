@@ -1,13 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
-project(HyprWin VERSION 0.1 LANGUAGES CXX)
+project(HyprWin VERSION 0.1 LANGUAGES CXX C) # Added C for Lua compilation
 
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Just include, don't build core as separate binary yet if it's empty
+# Include paths
+include_directories(third_party/sol third_party/lua)
+
+# Create a static library for Lua from its source files
+file(GLOB LUA_SOURCES "third_party/lua/*.c")
+add_library(lua_lib STATIC ${LUA_SOURCES})
+
+# Main logic
 add_subdirectory(core)
 
-# Main executable
 add_executable(HyprWin core/src/main.cpp)
-
-target_link_libraries(HyprWin PRIVATE core_lib user32 dwmapi dcomp)
+target_link_libraries(HyprWin PRIVATE core_lib lua_lib)
