@@ -34,10 +34,17 @@ int main() {
       std::cout << "[LUA]: " << message << std::endl;
     });
 
-    std::cout << "HyprWin: Running test script..." << std::endl;
+    char buffer[MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MAX_PATH);
+    std::string path(buffer);
+    std::string exe_dir = path.substr(0, path.find_last_of("\\/"));
 
-    // Execute Lua code
-    auto result = lua.script("log('HyprWin Lua bridge is alive!')");
+    // Load the entry point script from the scripts folder
+    std::string script_path = exe_dir + "\\scripts\\main.lua";
+
+    std::cout << "HyprWin: Loading script from " << script_path << std::endl;
+
+    auto result = lua.script_file(script_path);
 
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
