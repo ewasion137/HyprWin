@@ -1,26 +1,32 @@
 #ifndef NOMINMAX
-#define NOMINMAX // Prevents Windows.h from defining min/max macros
+#define NOMINMAX
 #endif
 
-#include <dwmapi.h>
 #include <iostream>
-#include <limits>
+#include <sol/sol.hpp> // The magic bridge
 #include <windows.h>
 
 
 int main() {
-  std::cout << "HyprWin: Core initialized." << std::endl;
+  std::cout << "HyprWin: Initializing Lua engine..." << std::endl;
 
-  BOOL enabled = FALSE;
-  DwmIsCompositionEnabled(&enabled);
+  // Initialize Lua state
+  sol::state lua;
+  lua.open_libraries(sol::lib::base);
 
-  std::cout << "HyprWin: DWM composition is "
-            << (enabled ? "ENABLED" : "DISABLED") << std::endl;
+  // Let's create a simple function in C++ that Lua can call
+  lua.set_function("log", [](std::string message) {
+    std::cout << "[LUA]: " << message << std::endl;
+  });
 
-  std::cout << "\nPress Enter to exit..." << std::endl;
-  std::cin.clear();
-  // Use parentheses to avoid macro collision even with NOMINMAX
-  std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
+  // Run a test script
+  try {
+    lua.script("log('HyprWin Lua bridge is alive!')");
+  } catch (const sol::error &e) {
+    std::cerr << "Lua Error: " << e.what() << std::endl;
+  }
+
+  std::cout << "Press Enter to exit..." << std::endl;
   std::cin.get();
 
   return 0;
