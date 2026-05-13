@@ -74,7 +74,3 @@ desktop.ini
 
 # --- Lua / Scripting ---
 *.log
-
-# --- HyprWin Specific ---
-/third_party/*
-!/third_party/.gitkeep
