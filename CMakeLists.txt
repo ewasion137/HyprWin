@@ -28,3 +28,14 @@ add_subdirectory(core)
 add_executable(HyprWin core/src/main.cpp)
 target_link_libraries(HyprWin PRIVATE core_lib lua_lib user32 dwmapi dcomp)
 
+# Copy scripts to the build directory for easy debugging
+add_custom_command(TARGET HyprWin POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+    "$<TARGET_FILE_DIR:HyprWin>/scripts"
+    COMMENT "Deploying scripts to executable directory"
+)
+
+# Future installation rules for Setup
+install(TARGETS HyprWin RUNTIME DESTINATION .)
+install(DIRECTORY scripts DESTINATION .)
