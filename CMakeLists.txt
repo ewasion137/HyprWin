@@ -26,5 +26,5 @@ add_library(lua_lib STATIC ${LUA_SOURCES})
 add_subdirectory(core)
 
 add_executable(HyprWin core/src/main.cpp)
-target_link_libraries(HyprWin PRIVATE core_lib lua_lib)
+target_link_libraries(HyprWin PRIVATE core_lib lua_lib user32 dwmapi dcomp)
 
