@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(HyprWin VERSION 0.1 LANGUAGES CXX C) # Added C for Lua compilation
-
+add_definitions(-DLUA_OPNAMES)
+if(MSVC)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+endif()
 set(CMAKE_CXX_STANDARD 20)
 
 # Include paths
