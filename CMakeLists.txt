@@ -28,7 +28,3 @@ add_subdirectory(core)
 add_executable(HyprWin core/src/main.cpp)
 target_link_libraries(HyprWin PRIVATE core_lib lua_lib)
 
-# Define install rules for the Setup later
-install(TARGETS HyprWin RUNTIME DESTINATION bin)
-install(DIRECTORY scripts/ DESTINATION bin/scripts)
-install(DIRECTORY assets/ DESTINATION bin/assets)
