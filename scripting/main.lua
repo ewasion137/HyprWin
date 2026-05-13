@@ -1,0 +1,1 @@
+log("HyprWin Lua logic started from scripts/main.lua")
