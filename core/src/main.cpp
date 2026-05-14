@@ -28,8 +28,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == NULL)
     return;
 
-  // Filter windows (ignore tooltips, invisible windows, etc.)
-  if (!IsWindowVisible(hwnd))
+  if (!IsWindowVisible(hwnd) || !IsToplevelWindow(hwnd))
     return;
 
   // Call Lua dispatcher
@@ -43,6 +42,19 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
       dispatcher(event, (size_t)hwnd, std::string(title));
     }
   }
+}
+
+bool IsToplevelWindow(HWND hwnd) {
+  long style = GetWindowLong(hwnd, GWL_STYLE);
+  long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
+
+  // Filter out tooltips, child windows, and hidden shells
+  if (ex_style & WS_EX_TOOLWINDOW)
+    return false;
+  if (!(style & WS_CAPTION))
+    return false;
+
+  return true;
 }
 
 int main() {
