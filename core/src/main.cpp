@@ -2,20 +2,22 @@
 #define NOMINMAX
 #endif
 
-// 1. Включаем все защиты sol2 ПЕРЕД хедером
 #define SOL_ALL_SAFETIES_ON 1
 
 #include <iostream>
+#include <string> // Added for std::string
 #include <windows.h>
 
-
-// 2. Явно подключаем Lua с C-линковкой (на всякий случай)
+// --- FIXED CODE LOCATOR: Header order ---
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 }
 
+#include <sol/sol.hpp> // Move this ABOVE the global pointer and callback
+
+// Now types are known to the compiler
 sol::state *g_lua = nullptr;
 
 // Callback function that handles Windows events
@@ -42,8 +44,6 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
     }
   }
 }
-
-#include <sol/sol.hpp>
 
 int main() {
   // Wrap everything in a try-catch to catch sol2 exceptions
