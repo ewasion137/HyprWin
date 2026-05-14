@@ -47,11 +47,20 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
 bool IsToplevelWindow(HWND hwnd) {
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
+  HWND owner = GetWindowIdentify(hwnd); // Check if window has an owner
 
-  // Filter out tooltips, child windows, and hidden shells
+  // Filter out tooltips, child windows, and popups without a taskbar icon
   if (ex_style & WS_EX_TOOLWINDOW)
     return false;
+  if (owner != NULL)
+    return false; // Real app windows usually don't have an owner
   if (!(style & WS_CAPTION))
+    return false;
+
+  // Ignore small "ghost" windows
+  RECT rect;
+  GetWindowRect(hwnd, &rect);
+  if ((rect.right - rect.left) <= 1 || (rect.bottom - rect.top) <= 1)
     return false;
 
   return true;
