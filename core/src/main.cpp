@@ -14,7 +14,33 @@ extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+}
 
+sol::state *g_lua = nullptr;
+
+// Callback function that handles Windows events
+void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
+                           LONG idObject, LONG idChild, DWORD dwEventThread,
+                           DWORD dwmsEventTime) {
+  // We only care about main window objects
+  if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == NULL)
+    return;
+
+  // Filter windows (ignore tooltips, invisible windows, etc.)
+  if (!IsWindowVisible(hwnd))
+    return;
+
+  // Call Lua dispatcher
+  if (g_lua) {
+    char title[256];
+    GetWindowTextA(hwnd, title, sizeof(title));
+
+    // Use a safe call to the Lua dispatcher
+    sol::protected_function dispatcher = (*g_lua)["HyprWin"]["dispatch_event"];
+    if (dispatcher.valid()) {
+      dispatcher(event, (size_t)hwnd, std::string(title));
+    }
+  }
 }
 
 #include <sol/sol.hpp>
@@ -23,8 +49,8 @@ int main() {
   // Wrap everything in a try-catch to catch sol2 exceptions
   try {
     std::cout << "HyprWin: Initializing Lua engine..." << std::endl;
-
     sol::state lua;
+    g_lua = &lua;
 
     // Open standard libraries safely
     lua.open_libraries(sol::lib::base, sol::lib::package);
@@ -45,7 +71,26 @@ int main() {
     std::cout << "HyprWin: Loading script from " << script_path << std::endl;
 
     auto result = lua.script_file(script_path);
+    HWINEVENTHOOK hook =
+        SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, NULL,
+                        WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
+    if (!hook) {
+      std::cerr << "HyprWin: Failed to register WinEventHook!" << std::endl;
+      return 1;
+    }
+
+    std::cout << "HyprWin: Window hook registered. Monitoring windows..."
+              << std::endl;
+
+    // Message loop is REQUIRED for hooks to work
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
+
+    UnhookWinEvent(hook);
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
     }
