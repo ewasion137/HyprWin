@@ -71,6 +71,17 @@ int main() {
     lua.set_function("log", [](std::string message) {
       std::cout << "[LUA]: " << message << std::endl;
     });
+    auto wm = lua.create_named_table("wm");
+
+    wm.set_function("move_window", [](size_t hwnd, int x, int y, int w, int h) {
+      SetWindowPos((HWND)hwnd, NULL, x, y, w, h,
+                   SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    });
+
+    wm.set_function("get_screen_size", []() {
+      return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
+                            GetSystemMetrics(SM_CYSCREEN));
+    });
 
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
