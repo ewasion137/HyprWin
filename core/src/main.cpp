@@ -82,6 +82,12 @@ int main() {
     });
     auto wm = lua.create_named_table("wm");
 
+    wm.set_function("get_class_name", [](size_t hwnd) {
+      char class_name[256];
+      GetClassNameA((HWND)hwnd, class_name, sizeof(class_name));
+      return std::string(class_name);
+    });
+    
     wm.set_function("move_window", [](size_t hwnd, int x, int y, int w, int h) {
       SetWindowPos((HWND)hwnd, NULL, x, y, w, h,
                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
