@@ -19,7 +19,27 @@ extern "C" {
 
 // Now types are known to the compiler
 sol::state *g_lua = nullptr;
+bool IsToplevelWindow(HWND hwnd) {
+  long style = GetWindowLong(hwnd, GWL_STYLE);
+  long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
 
+  // Get the owner window
+  HWND owner = GetWindow(hwnd, GW_OWNER);
+
+  if (ex_style & WS_EX_TOOLWINDOW)
+    return false;
+  if (owner != NULL)
+    return false;
+  if (!(style & WS_CAPTION))
+    return false;
+
+  RECT rect;
+  GetWindowRect(hwnd, &rect);
+  if ((rect.right - rect.left) <= 1 || (rect.bottom - rect.top) <= 1)
+    return false;
+
+  return true;
+}
 // Callback function that handles Windows events
 void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
                            LONG idObject, LONG idChild, DWORD dwEventThread,
@@ -44,27 +64,6 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   }
 }
 
-bool IsToplevelWindow(HWND hwnd) {
-  long style = GetWindowLong(hwnd, GWL_STYLE);
-  long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-  // Get the owner window
-  HWND owner = GetWindow(hwnd, GW_OWNER);
-
-  if (ex_style & WS_EX_TOOLWINDOW)
-    return false;
-  if (owner != NULL)
-    return false;
-  if (!(style & WS_CAPTION))
-    return false;
-
-  RECT rect;
-  GetWindowRect(hwnd, &rect);
-  if ((rect.right - rect.left) <= 1 || (rect.bottom - rect.top) <= 1)
-    return false;
-
-  return true;
-}
 int main() {
   // Wrap everything in a try-catch to catch sol2 exceptions
   try {
