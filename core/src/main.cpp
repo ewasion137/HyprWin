@@ -166,9 +166,20 @@ int main() {
 
     // Message loop is REQUIRED for hooks to work
     MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
+    while (true) {
+      // Check for messages without blocking to keep rendering smooth
+      if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+        if (msg.message == WM_QUIT)
+          break;
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+      }
+
+      // Trigger Lua rendering
+      sol::protected_function render_func = lua["ui"]["render"];
+      if (render_func.valid()) {
+        render_func();
+      }
     }
 
     UnhookWinEvent(hook);
