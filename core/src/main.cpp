@@ -4,6 +4,7 @@
 
 #define SOL_ALL_SAFETIES_ON 1
 
+#include "../include/renderer.hpp"
 #include <iostream>
 #include <string> // Added for std::string
 #include <windows.h>
