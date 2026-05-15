@@ -119,6 +119,27 @@ int main() {
 
       g_renderer.end_draw();
     });
+    WNDCLASSEXA wc = {sizeof(WNDCLASSEXA),
+                      CS_HREDRAW | CS_VREDRAW,
+                      DefWindowProcA,
+                      0,
+                      0,
+                      GetModuleHandle(NULL),
+                      NULL,
+                      NULL,
+                      NULL,
+                      NULL,
+                      "HyprWinOverlay",
+                      NULL};
+    RegisterClassExA(&wc);
+    HWND overlay_hwnd = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, "HyprWinOverlay",
+        "Overlay", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
+        GetSystemMetrics(SM_CYSCREEN), NULL, NULL, wc.hInstance, NULL);
+    SetLayeredWindowAttributes(overlay_hwnd, 0, 255, LWA_ALPHA);
+    ShowWindow(overlay_hwnd, SW_SHOW);
+
+    g_renderer.init(overlay_hwnd);
 
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
