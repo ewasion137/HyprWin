@@ -26,7 +26,7 @@ add_library(lua_lib STATIC ${LUA_SOURCES})
 add_subdirectory(core)
 
 add_executable(HyprWin core/src/main.cpp)
-target_link_libraries(HyprWin PRIVATE core_lib lua_lib user32 dwmapi dcomp)
+target_link_libraries(HyprWin PRIVATE core_lib lua_lib user32 dwmapi dcomp d2d1)
 
 # Copy scripts to the build directory for easy debugging
 add_custom_command(TARGET HyprWin POST_BUILD
