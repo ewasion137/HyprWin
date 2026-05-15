@@ -26,9 +26,9 @@ end
 log("HyprWin: Tiling engine ready. Garbage filter improved.")
 
 HyprWin.on_render = function()
-    -- This clears the overlay but shouldn't block the desktop
-    -- ui.render calls g_renderer.clear(0, 0, 0, 0) - which is correct.
+    -- Big solid purple square to verify transparency and rendering
+    ui.fill_rect(100, 100, 400, 400, 0.5, 0.0, 1.0, 0.8)
     
-    -- Draw your purple box
-    ui.draw_rect(5, 5, 200, 30, 0.5, 0.0, 1.0, 1.0, 2.0)
+    -- Small border around it
+    ui.draw_rect(100, 100, 400, 400, 1.0, 1.0, 1.0, 1.0, 2.0)
 end

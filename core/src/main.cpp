@@ -107,7 +107,10 @@ int main() {
                        float b, float a, float thickness) {
                       g_renderer.draw_rect(x, y, w, h, r, g, b, a, thickness);
                     });
-
+    ui.set_function("fill_rect", [](float x, float y, float w, float h, float r,
+                                    float g, float b, float a) {
+      g_renderer.fill_rect(x, y, w, h, r, g, b, a);
+    });
     ui.set_function("render", []() {
       g_renderer.begin_draw();
       g_renderer.clear(0, 0, 0, 0); // Transparent background
