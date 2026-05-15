@@ -20,6 +20,8 @@ extern "C" {
 
 // Now types are known to the compiler
 sol::state *g_lua = nullptr;
+Renderer g_renderer;
+
 bool IsToplevelWindow(HWND hwnd) {
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
@@ -95,6 +97,27 @@ int main() {
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
                             GetSystemMetrics(SM_CYSCREEN));
+    });
+    auto ui = lua.create_named_table("ui");
+
+    ui.set_function("draw_rect",
+                    [](float x, float y, float w, float h, float r, float g,
+                       float b, float a, float thickness) {
+                      g_renderer.draw_rect(x, y, w, h, r, g, b, a, thickness);
+                    });
+
+    ui.set_function("render", []() {
+      g_renderer.begin_draw();
+      g_renderer.clear(0, 0, 0, 0); // Transparent background
+
+      // Call a Lua function to handle frame drawing
+      if (g_lua) {
+        sol::protected_function draw_func = (*g_lua)["HyprWin"]["on_render"];
+        if (draw_func.valid())
+          draw_func();
+      }
+
+      g_renderer.end_draw();
     });
 
     char buffer[MAX_PATH];
