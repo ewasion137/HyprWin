@@ -24,3 +24,9 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
 end
 
 log("HyprWin: Tiling engine ready. Garbage filter improved.")
+
+HyprWin.on_render = function()
+    -- Draw a simple top bar (Position X, Y, Width, Height, R, G, B, Alpha, Thickness)
+    ui.draw_rect(0, 0, 1920, 30, 0.1, 0.1, 0.1, 0.8, 0) -- Background
+    ui.draw_rect(5, 5, 100, 20, 0.5, 0.0, 1.0, 1.0, 2.0) -- "Hyprland" styled button
+end
