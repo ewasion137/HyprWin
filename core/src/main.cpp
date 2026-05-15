@@ -5,9 +5,11 @@
 #define SOL_ALL_SAFETIES_ON 1
 
 #include "../include/renderer.hpp"
+#include <dwmapi.h>
 #include <iostream>
 #include <string> // Added for std::string
 #include <windows.h>
+
 
 // --- FIXED CODE LOCATOR: Header order ---
 extern "C" {
