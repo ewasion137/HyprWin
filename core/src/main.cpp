@@ -133,23 +133,30 @@ int main() {
                       NULL,
                       NULL,
                       (HBRUSH)GetStockObject(
-                          NULL_BRUSH), // Use NULL_BRUSH to prevent OS flicker
+                          BLACK_BRUSH), // Use BLACK_BRUSH for DWM transparency
                       NULL,
                       "HyprWinOverlay",
                       NULL};
     RegisterClassExA(&wc);
 
-    // Use WS_EX_NOREDIRECTIONBITMAP for better performance if needed,
-    // but for now let's fix the basic transparency.
     HWND overlay_hwnd = CreateWindowExA(
         WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, "HyprWinOverlay",
         "Overlay", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
         GetSystemMetrics(SM_CYSCREEN), NULL, NULL, wc.hInstance, NULL);
 
-    // --- FIXED CODE START ---
-    // Instead of SetLayeredWindowAttributes, we use DWM to enable transparency
-    MARGINS margins = {-1}; // -1 makes the whole window transparent
+    // Set the window to be fully opaque layered window first
+    SetLayeredWindowAttributes(overlay_hwnd, 0, 255, LWA_ALPHA);
+
+    MARGINS margins = {-1};
     DwmExtendFrameIntoClientArea(overlay_hwnd, &margins);
+
+    // Check if renderer initialized properly
+    if (!g_renderer.init(overlay_hwnd)) {
+      std::cerr << "HyprWin: Failed to initialize Renderer!" << std::endl;
+      return -1;
+    }
+
+    ShowWindow(overlay_hwnd, SW_SHOW);
 
     // Set transparency and click-through
     SetWindowPos(overlay_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
