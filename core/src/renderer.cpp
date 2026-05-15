@@ -20,8 +20,10 @@ bool Renderer::init(HWND hwnd) {
   HRESULT hr = factory->CreateHwndRenderTarget(
       D2D1::RenderTargetProperties(
           D2D1_RENDER_TARGET_TYPE_DEFAULT,
-          D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
-                            D2D1_ALPHA_MODE_PREMULTIPLIED)),
+          D2D1::PixelFormat(
+              DXGI_FORMAT_B8G8R8A8_UNORM,
+              D2D1_ALPHA_MODE_PREMULTIPLIED) // Crucial for transparency
+          ),
       D2D1::HwndRenderTargetProperties(
           hwnd, D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top)),
       &target);
