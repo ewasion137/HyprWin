@@ -134,12 +134,23 @@ int main() {
                       "HyprWinOverlay",
                       NULL};
     RegisterClassExA(&wc);
+
+    // Use WS_EX_NOREDIRECTIONBITMAP for better performance if needed,
+    // but for now let's fix the basic transparency.
     HWND overlay_hwnd = CreateWindowExA(
         WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, "HyprWinOverlay",
         "Overlay", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
         GetSystemMetrics(SM_CYSCREEN), NULL, NULL, wc.hInstance, NULL);
-    SetLayeredWindowAttributes(overlay_hwnd, 0, 255, LWA_ALPHA);
-    ShowWindow(overlay_hwnd, SW_SHOW);
+
+    // --- FIXED CODE START ---
+    // Instead of SetLayeredWindowAttributes, we use DWM to enable transparency
+    MARGINS margins = {-1}; // -1 makes the whole window transparent
+    DwmExtendFrameIntoClientArea(overlay_hwnd, &margins);
+
+    // Set transparency and click-through
+    SetWindowPos(overlay_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    // --- FIXED CODE END ---
 
     g_renderer.init(overlay_hwnd);
 
