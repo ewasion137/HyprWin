@@ -48,6 +48,15 @@ void Renderer::draw_rect(float x, float y, float w, float h, float r, float g,
   brush->Release();
 }
 
+void Renderer::fill_rect(float x, float y, float w, float h, float r, float g,
+                         float b, float a) {
+  if (!target)
+    return;
+  target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+  target->FillRectangle(D2D1::RectF(x, y, x + w, y + h), brush);
+  brush->Release();
+}
+
 void Renderer::clear(float r, float g, float b, float a) {
   if (target)
     target->Clear(D2D1::ColorF(r, g, b, a));

@@ -17,8 +17,9 @@ public:
   // Basic primitives for Lua UI
   void draw_rect(float x, float y, float w, float h, float r, float g, float b,
                  float a, float thickness);
+  void fill_rect(float x, float y, float w, float h, float r, float g, float b,
+                 float a); // Add this
   void clear(float r, float g, float b, float a);
-
 private:
   ID2D1Factory *factory;
   ID2D1HwndRenderTarget *target;

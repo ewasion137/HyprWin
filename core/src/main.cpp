@@ -129,7 +129,8 @@ int main() {
                       GetModuleHandle(NULL),
                       NULL,
                       NULL,
-                      NULL,
+                      (HBRUSH)GetStockObject(
+                          NULL_BRUSH), // Use NULL_BRUSH to prevent OS flicker
                       NULL,
                       "HyprWinOverlay",
                       NULL};
