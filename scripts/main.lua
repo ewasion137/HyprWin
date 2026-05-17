@@ -46,21 +46,21 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         return
     end
 
-    -- EVENT_OBJECT_CREATE (0x8000) or EVENT_OBJECT_SHOW (0x8002)
-    if event_type == 0x8000 or event_type == 0x8002 then
+    -- EVENT_OBJECT_CREATE (0x8000), EVENT_OBJECT_SHOW (0x8002) or EVENT_SYSTEM_MINIMIZEEND (0x0017)
+    if event_type == 0x8000 or event_type == 0x8002 or event_type == 0x0017 then
         local tracked, _ = is_tracked(hwnd)
         if title ~= "" and title ~= "Program Manager" and not tracked then
-            log("Tracking new window: [" .. title .. "]")
+            log("Tracking/Restoring window: [" .. title .. "]")
             table.insert(HyprWin.windows, hwnd)
             HyprWin.retile()
         end
     end
 
-    -- EVENT_OBJECT_DESTROY (0x8001) or EVENT_OBJECT_HIDE (0x8003)
-    if event_type == 0x8001 or event_type == 0x8003 then
+    -- EVENT_OBJECT_DESTROY (0x8001), EVENT_OBJECT_HIDE (0x8003) or EVENT_SYSTEM_MINIMIZESTART (0x0016)
+    if event_type == 0x8001 or event_type == 0x8003 or event_type == 0x0016 then
         local tracked, index = is_tracked(hwnd)
         if tracked then
-            log("Untracking window: [" .. title .. "]")
+            log("Untracking/Minimizing window: [" .. title .. "]")
             table.remove(HyprWin.windows, index)
             if HyprWin.focused_window == hwnd then
                 HyprWin.focused_window = nil
@@ -78,16 +78,19 @@ end
 HyprWin.on_render = function()
     -- Draw borders around tracked windows
     for _, hwnd in ipairs(HyprWin.windows) do
-        local x, y, w, h = wm.get_window_rect(hwnd)
-        
-        -- Check if we successfully got rect
-        if w > 0 and h > 0 then
-            if hwnd == HyprWin.focused_window then
-                -- Active window border (Red)
-                ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 1.0, 0.2, 0.2, 1.0, 3.0)
-            else
-                -- Inactive window border (Gray)
-                ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 0.5, 0.5, 0.5, 0.8, 2.0)
+        -- Only draw border if window is actually visible and not minimized
+        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) then
+            local x, y, w, h = wm.get_window_rect(hwnd)
+            
+            -- Check if we successfully got rect
+            if w > 0 and h > 0 then
+                if hwnd == HyprWin.focused_window then
+                    -- Active window border (Red)
+                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 1.0, 0.2, 0.2, 1.0, 3.0)
+                else
+                    -- Inactive window border (Gray)
+                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 0.5, 0.5, 0.5, 0.8, 2.0)
+                end
             end
         end
     end

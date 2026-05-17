@@ -53,9 +53,9 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == NULL)
     return;
 
-  // Bypass visibility/toplevel checks for destroy and hide events since the window
+  // Bypass visibility/toplevel checks for destroy, hide, and minimize events since the window
   // is no longer fully valid/visible at this stage, but we still need to untrack it.
-  bool is_destroy_or_hide = (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE);
+  bool is_destroy_or_hide = (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE || event == EVENT_SYSTEM_MINIMIZESTART);
   
   if (!is_destroy_or_hide) {
     if (!IsWindowVisible(hwnd) || !IsToplevelWindow(hwnd))
@@ -102,7 +102,7 @@ int main() {
     auto wm = lua.create_named_table("wm");
 
     wm.set_function("get_class_name", [](size_t hwnd) {
-      char class_name[256];
+      char class_name[256] = {0};
       GetClassNameA((HWND)hwnd, class_name, sizeof(class_name));
       return std::string(class_name);
     });
@@ -118,10 +118,20 @@ int main() {
     });
 
     wm.set_function("get_window_rect", [](size_t hwnd) {
-      RECT rect;
-      GetWindowRect((HWND)hwnd, &rect);
-      // Returns x, y, width, height
-      return std::make_tuple(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+      RECT rect = {0};
+      if (GetWindowRect((HWND)hwnd, &rect)) {
+        // Returns x, y, width, height
+        return std::make_tuple(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+      }
+      return std::make_tuple(0, 0, 0, 0);
+    });
+
+    wm.set_function("is_window_visible", [](size_t hwnd) {
+      return (bool)IsWindowVisible((HWND)hwnd);
+    });
+
+    wm.set_function("is_minimized", [](size_t hwnd) {
+      return (bool)IsIconic((HWND)hwnd);
     });
 
     wm.set_function("enumerate_windows", []() {
@@ -231,7 +241,12 @@ int main() {
         SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
                         WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
-    if (!hook_objects || !hook_focus) {
+    // Hook for system minimize/restore events (0x0016 to 0x0017)
+    HWINEVENTHOOK hook_minimize =
+        SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, NULL,
+                        WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+
+    if (!hook_objects || !hook_focus || !hook_minimize) {
       std::cerr << "HyprWin: Failed to register WinEventHooks!" << std::endl;
       return 1;
     }
@@ -259,6 +274,7 @@ int main() {
 
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
+    UnhookWinEvent(hook_minimize);
     
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
