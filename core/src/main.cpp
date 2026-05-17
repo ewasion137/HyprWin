@@ -247,9 +247,9 @@ int main() {
     }
     std::cout << "HyprWin: Lua script loaded successfully!" << std::endl;
     
-    // Hook for window creation, destruction, show and hide events (0x8000 to 0x8003)
+    // Hook for window creation, destruction, show, hide and namechange events (0x8000 to 0x800C)
     HWINEVENTHOOK hook_objects =
-        SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE, NULL,
+        SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_NAMECHANGE, NULL,
                         WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
     // Hook for system foreground (focus) changes

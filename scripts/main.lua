@@ -46,8 +46,8 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         return
     end
 
-    -- EVENT_OBJECT_CREATE (0x8000), EVENT_OBJECT_SHOW (0x8002) or EVENT_SYSTEM_MINIMIZEEND (0x0017)
-    if event_type == 0x8000 or event_type == 0x8002 or event_type == 0x0017 then
+    -- EVENT_OBJECT_CREATE (0x8000), EVENT_OBJECT_SHOW (0x8002), EVENT_SYSTEM_MINIMIZEEND (0x0017) or EVENT_OBJECT_NAMECHANGE (0x800C)
+    if event_type == 0x8000 or event_type == 0x8002 or event_type == 0x0017 or event_type == 0x800C then
         local tracked, _ = is_tracked(hwnd)
         if title ~= "" and title ~= "Program Manager" and not tracked then
             log("Tracking/Restoring window: [" .. title .. "]")
