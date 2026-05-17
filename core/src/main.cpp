@@ -53,18 +53,34 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == NULL)
     return;
 
-  if (!IsWindowVisible(hwnd) || !IsToplevelWindow(hwnd))
-    return;
+  // Bypass visibility/toplevel checks for destroy and hide events since the window
+  // is no longer fully valid/visible at this stage, but we still need to untrack it.
+  bool is_destroy_or_hide = (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE);
+  
+  if (!is_destroy_or_hide) {
+    if (!IsWindowVisible(hwnd) || !IsToplevelWindow(hwnd))
+      return;
+  }
 
   // Call Lua dispatcher
   if (g_lua) {
     char title[256];
     GetWindowTextA(hwnd, title, sizeof(title));
 
-    // Use a safe call to the Lua dispatcher
+    // Log the caught event to console for debugging
+    std::cout << "[Hook Event] HWND: 0x" << std::hex << (size_t)hwnd << std::dec 
+              << " | Event: 0x" << std::hex << event << std::dec 
+              << " | Title: " << title << std::endl;
+
     sol::protected_function dispatcher = (*g_lua)["HyprWin"]["dispatch_event"];
     if (dispatcher.valid()) {
-      dispatcher(event, (size_t)hwnd, std::string(title));
+      auto result = dispatcher(event, (size_t)hwnd, std::string(title));
+      if (!result.valid()) {
+        sol::error err = result;
+        std::cerr << "!!! LUA EVENT ERROR: " << err.what() << std::endl;
+      }
+    } else {
+      std::cerr << "!!! LUA WARNING: HyprWin.dispatch_event is not defined!" << std::endl;
     }
   }
 }
@@ -77,7 +93,7 @@ int main() {
     g_lua = &lua;
 
     // Open standard libraries safely
-    lua.open_libraries(sol::lib::base, sol::lib::package);
+    lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::math, sol::lib::table);
 
     // Bind a C++ function to Lua
     lua.set_function("log", [](std::string message) {
@@ -99,6 +115,25 @@ int main() {
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
                             GetSystemMetrics(SM_CYSCREEN));
+    });
+
+    wm.set_function("get_window_rect", [](size_t hwnd) {
+      RECT rect;
+      GetWindowRect((HWND)hwnd, &rect);
+      // Returns x, y, width, height
+      return std::make_tuple(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+    });
+
+    wm.set_function("enumerate_windows", []() {
+      std::vector<size_t> hwnds;
+      EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
+        auto list = (std::vector<size_t>*)lParam;
+        if (IsWindowVisible(hwnd) && IsToplevelWindow(hwnd)) {
+          list->push_back((size_t)hwnd);
+        }
+        return TRUE;
+      }, (LPARAM)&hwnds);
+      return hwnds;
     });
     auto ui = lua.create_named_table("ui");
 
@@ -175,7 +210,16 @@ int main() {
 
     std::cout << "HyprWin: Loading script from " << script_path << std::endl;
 
-    auto result = lua.script_file(script_path);
+    sol::protected_function_result result = lua.script_file(script_path);
+    if (!result.valid()) {
+      sol::error err = result;
+      std::cerr << "!!! LUA SCRIPT ERROR: Failed to load/run " << script_path << std::endl;
+      std::cerr << "Details: " << err.what() << std::endl;
+      std::cout << "Press Enter to exit..." << std::endl;
+      std::cin.get();
+      return 1;
+    }
+    std::cout << "HyprWin: Lua script loaded successfully!" << std::endl;
     
     // Hook for window creation, destruction, show and hide events (0x8000 to 0x8003)
     HWINEVENTHOOK hook_objects =
