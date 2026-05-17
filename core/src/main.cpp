@@ -25,10 +25,14 @@ sol::state *g_lua = nullptr;
 Renderer g_renderer;
 
 bool IsToplevelWindow(HWND hwnd) {
+  // Ignore our own windows (console and overlay) to avoid tiling them
+  DWORD pid;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid == GetCurrentProcessId())
+    return false;
+
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-  // Get the owner window
   HWND owner = GetWindow(hwnd, GW_OWNER);
 
   if (ex_style & WS_EX_TOOLWINDOW)
@@ -38,9 +42,21 @@ bool IsToplevelWindow(HWND hwnd) {
   if (!(style & WS_CAPTION))
     return false;
 
+  // Filter out cloaked windows (suspended UWP apps, virtual desktops, background apps)
+  int cloaked = 0;
+  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0) {
+    return false;
+  }
+
   RECT rect;
   GetWindowRect(hwnd, &rect);
   if ((rect.right - rect.left) <= 1 || (rect.bottom - rect.top) <= 1)
+    return false;
+
+  // Filter out windows with empty titles (helper/invisible utility windows)
+  char title[256] = {0};
+  GetWindowTextA(hwnd, title, sizeof(title));
+  if (strlen(title) == 0)
     return false;
 
   return true;
@@ -120,8 +136,8 @@ int main() {
     wm.set_function("get_window_rect", [](size_t hwnd) {
       RECT rect = {0};
       if (GetWindowRect((HWND)hwnd, &rect)) {
-        // Returns x, y, width, height
-        return std::make_tuple(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+        // Returns x, y, width, height (explicitly cast to int to match return types)
+        return std::make_tuple((int)rect.left, (int)rect.top, (int)(rect.right - rect.left), (int)(rect.bottom - rect.top));
       }
       return std::make_tuple(0, 0, 0, 0);
     });
