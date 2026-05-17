@@ -176,12 +176,19 @@ int main() {
     std::cout << "HyprWin: Loading script from " << script_path << std::endl;
 
     auto result = lua.script_file(script_path);
-    HWINEVENTHOOK hook =
-        SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_HIDE, NULL,
+    
+    // Hook for window creation, destruction, show and hide events (0x8000 to 0x8003)
+    HWINEVENTHOOK hook_objects =
+        SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE, NULL,
                         WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
-    if (!hook) {
-      std::cerr << "HyprWin: Failed to register WinEventHook!" << std::endl;
+    // Hook for system foreground (focus) changes
+    HWINEVENTHOOK hook_focus =
+        SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, NULL,
+                        WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+
+    if (!hook_objects || !hook_focus) {
+      std::cerr << "HyprWin: Failed to register WinEventHooks!" << std::endl;
       return 1;
     }
 
@@ -206,7 +213,9 @@ int main() {
       }
     }
 
-    UnhookWinEvent(hook);
+    UnhookWinEvent(hook_objects);
+    UnhookWinEvent(hook_focus);
+    
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
     }
