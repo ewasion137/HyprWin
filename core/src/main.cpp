@@ -25,10 +25,10 @@ sol::state *g_lua = nullptr;
 Renderer g_renderer;
 
 bool IsToplevelWindow(HWND hwnd) {
-  // Ignore our own windows (console and overlay) to avoid tiling them
-  DWORD pid;
-  GetWindowThreadProcessId(hwnd, &pid);
-  if (pid == GetCurrentProcessId())
+  // Ignore our overlay window to avoid tiling it
+  char class_name[256] = {0};
+  GetClassNameA(hwnd, class_name, sizeof(class_name));
+  if (strcmp(class_name, "HyprWinOverlay") == 0)
     return false;
 
   long style = GetWindowLong(hwnd, GWL_STYLE);
