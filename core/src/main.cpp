@@ -107,8 +107,8 @@ int main() {
       return std::string(class_name);
     });
 
-    wm.set_function("move_window", [](size_t hwnd, int x, int y, int w, int h) {
-      SetWindowPos((HWND)hwnd, NULL, x, y, w, h,
+    wm.set_function("move_window", [](size_t hwnd, double x, double y, double w, double h) {
+      SetWindowPos((HWND)hwnd, NULL, (int)x, (int)y, (int)w, (int)h,
                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     });
 

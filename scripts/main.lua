@@ -15,12 +15,13 @@ HyprWin.retile = function()
     if count == 1 then
         wm.move_window(HyprWin.windows[1], gap, gap, sw - (gap * 2), sh - (gap * 2))
     else
-        local master_w = math.floor(sw / 2)
-        wm.move_window(HyprWin.windows[1], gap, gap, master_w - gap - (gap / 2), sh - (gap * 2))
+        local master_w = sw // 2
+        local half_gap = gap // 2
+        wm.move_window(HyprWin.windows[1], gap, gap, master_w - gap - half_gap, sh - (gap * 2))
 
         local stack_count = count - 1
-        local stack_h = math.floor((sh - gap) / stack_count)
-        local stack_x = master_w + (gap / 2)
+        local stack_h = (sh - gap) // stack_count
+        local stack_x = master_w + half_gap
         
         for i = 2, count do
             local y_offset = gap + ((i - 2) * stack_h)
