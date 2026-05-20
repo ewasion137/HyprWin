@@ -46,34 +46,35 @@ end
 HyprWin.dispatch_event = function(event_type, hwnd, title)
     local class = wm.get_class_name(hwnd)
     
-    if class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") then
+    -- Filter out junk
+    if class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") or class == "HyprWinOverlay" then
         return
     end
 
-    -- EVENT_OBJECT_CREATE (0x8000), EVENT_OBJECT_SHOW (0x8002), EVENT_SYSTEM_MINIMIZEEND (0x0017) or EVENT_OBJECT_NAMECHANGE (0x800C)
-    if event_type == 0x8000 or event_type == 0x8002 or event_type == 0x0017 or event_type == 0x800C then
+    -- Capture: Use ONLY EVENT_OBJECT_SHOW (0x8002) for new windows
+    -- Use EVENT_SYSTEM_MINIMIZEEND (0x0017) for restored windows
+    if event_type == 0x8002 or event_type == 0x0017 then
         local tracked, _ = is_tracked(hwnd)
         if title ~= "" and title ~= "Program Manager" and not tracked then
-            log("Tracking/Restoring window: [" .. title .. "]")
+            log("Tracking window: [" .. title .. "] HWND: " .. hwnd)
             table.insert(HyprWin.windows, hwnd)
             HyprWin.retile()
         end
     end
 
-    -- EVENT_OBJECT_DESTROY (0x8001), EVENT_OBJECT_HIDE (0x8003) or EVENT_SYSTEM_MINIMIZESTART (0x0016)
-    if event_type == 0x8001 or event_type == 0x8003 or event_type == 0x0016 then
+    -- Release: EVENT_OBJECT_DESTROY (0x8001) or EVENT_SYSTEM_MINIMIZESTART (0x0016)
+    -- Ignore EVENT_OBJECT_HIDE (0x8003) as it fires too often for background apps
+    if event_type == 0x8001 or event_type == 0x0016 then
         local tracked, index = is_tracked(hwnd)
         if tracked then
-            log("Untracking/Minimizing window: [" .. title .. "]")
+            log("Untracking window: HWND: " .. hwnd)
             table.remove(HyprWin.windows, index)
-            if HyprWin.focused_window == hwnd then
-                HyprWin.focused_window = nil
-            end
+            if HyprWin.focused_window == hwnd then HyprWin.focused_window = nil end
             HyprWin.retile()
         end
     end
 
-    -- EVENT_SYSTEM_FOREGROUND (0x0003)
+    -- Focus
     if event_type == 0x0003 then
         HyprWin.focused_window = hwnd
     end
