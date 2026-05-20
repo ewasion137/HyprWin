@@ -25,7 +25,11 @@ sol::state *g_lua = nullptr;
 Renderer g_renderer;
 
 bool IsToplevelWindow(HWND hwnd) {
-  // Ignore our overlay window to avoid tiling it
+  DWORD pid;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (pid == GetCurrentProcessId())
+    return false;
+
   char class_name[256] = {0};
   GetClassNameA(hwnd, class_name, sizeof(class_name));
   if (strcmp(class_name, "HyprWinOverlay") == 0)
@@ -138,11 +142,18 @@ int main() {
 
     wm.set_function("get_window_rect", [](size_t hwnd) {
       RECT rect = {0};
-      if (GetWindowRect((HWND)hwnd, &rect)) {
-        // Returns x, y, width, height (explicitly cast to int to match return types)
-        return std::make_tuple((int)rect.left, (int)rect.top, (int)(rect.right - rect.left), (int)(rect.bottom - rect.top));
+      // Use DWM attribute to get bounds WITHOUT invisible shadows
+      if (SUCCEEDED(DwmGetWindowAttribute(
+              (HWND)hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &rect, sizeof(RECT)))) {
+        return std::make_tuple((int)rect.left, (int)rect.top,
+                               (int)(rect.right - rect.left),
+                               (int)(rect.bottom - rect.top));
       }
-      return std::make_tuple(0, 0, 0, 0);
+      // Fallback to normal rect if DWM fails
+      GetWindowRect((HWND)hwnd, &rect);
+      return std::make_tuple((int)rect.left, (int)rect.top,
+                             (int)(rect.right - rect.left),
+                             (int)(rect.bottom - rect.top));
     });
 
     wm.set_function("is_window_visible", [](size_t hwnd) {
