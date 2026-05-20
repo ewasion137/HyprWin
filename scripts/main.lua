@@ -74,14 +74,10 @@ end
 
 -- --- FIXED CODE LOCATOR: event dispatcher ---
 HyprWin.dispatch_event = function(event_type, hwnd, title)
+    if title == "" or title == nil then return end
     -- 0x8002: Show, 0x0017: Restore
     if event_type == 0x8002 or event_type == 0x0017 then
-        local found = false
-        for _, h in ipairs(HyprWin.windows) do if h == hwnd then found = true break end end
-        
-        if not found and title ~= "" then
-            -- Small delay to let Windows finish window creation
-            log("Capturing: " .. title)
+        if not is_tracked(hwnd) then
             table.insert(HyprWin.windows, hwnd)
             HyprWin.retile()
         end
@@ -89,13 +85,10 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
 
     -- 0x8001: Destroy, 0x8003: Hide, 0x0016: Minimize
     if event_type == 0x8001 or event_type == 0x8003 or event_type == 0x0016 then
-        for i, h in ipairs(HyprWin.windows) do
-            if h == hwnd then
-                log("Releasing window handle")
-                table.remove(HyprWin.windows, i)
-                HyprWin.retile()
-                break
-            end
+        local idx = is_tracked(hwnd)
+        if idx then
+            table.remove(HyprWin.windows, idx)
+            HyprWin.retile()
         end
     end
 
