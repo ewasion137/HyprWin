@@ -123,10 +123,13 @@ int main() {
       return std::string(class_name);
     });
 
-    wm.set_function("move_window", [](size_t hwnd, double x, double y, double w, double h) {
-      SetWindowPos((HWND)hwnd, NULL, (int)x, (int)y, (int)w, (int)h,
-                   SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    });
+    wm.set_function(
+        "move_window", [](size_t hwnd, double x, double y, double w, double h) {
+          // Added SWP_NOZORDER to keep our overlay on top, but removed
+          // SWP_NOACTIVATE if you want the tiled window to actually be usable
+          SetWindowPos((HWND)hwnd, HWND_BOTTOM, (int)x, (int)y, (int)w, (int)h,
+                       SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        });
 
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
