@@ -25,40 +25,44 @@ end
 
 -- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
-    local active_windows = {}
-    for _, hwnd in ipairs(HyprWin.windows) do
-        local title = "" -- You might want to bind GetWindowText to wm table for better Lua access
-        -- For now, we use existing list, but let's filter small windows
-        if is_valid(hwnd) then
-            table.insert(active_windows, hwnd)
+    -- Filter dead handles
+    local active = {}
+    for _, h in ipairs(HyprWin.windows) do
+        if wm.is_window_visible(h) and not wm.is_minimized(h) then
+            table.insert(active, h)
         end
     end
-    HyprWin.windows = active_windows
+    HyprWin.windows = active
 
-    local count = #HyprWin.windows
-    if count == 0 then return end
+    local n = #HyprWin.windows
+    if n == 0 then return end
 
     local sw, sh = wm.get_screen_size()
+    local gap = 10
     local bar_h = 35
-    local gap = 15 -- More gap = more Hyprland aesthetics
     
-    -- Master-Stack Logic (Inspired by Hyprland/dwms)
-    if count == 1 then
-        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, sw - (gap * 2), sh - bar_h - (gap * 2))
+    -- Calculation area
+    local tx = gap
+    local ty = bar_h + gap
+    local tw = sw - (gap * 2)
+    local th = sh - bar_h - (gap * 2)
+
+    if n == 1 then
+        wm.move_window(HyprWin.windows[1], tx, ty, tw, th)
     else
-        -- Master (Left 60%)
-        local master_width = math.floor(sw * 0.6)
-        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, master_width - (gap * 1.5), sh - bar_h - (gap * 2))
+        -- Mathematical split: Master gets 50%, Stack gets 50%
+        local m_w = (tw - gap) / 2
+        local s_w = tw - m_w - gap
+        local s_x = tx + m_w + gap
 
-        -- Stack (Right 40%)
-        local stack_x = master_width + (gap * 0.5)
-        local stack_width = sw - stack_x - gap
-        local total_stack_height = sh - bar_h - (gap * 2)
-        local individual_stack_height = (total_stack_height - (gap * (count - 2))) / (count - 1)
+        -- Master window
+        wm.move_window(HyprWin.windows[1], tx, ty, m_w, th)
 
-        for i = 2, count do
-            local y_pos = bar_h + gap + ((i - 2) * (individual_stack_height + gap))
-            wm.move_window(HyprWin.windows[i], stack_x, y_pos, stack_width, individual_stack_height)
+        -- Stack windows split height equally
+        local s_h = (th - (gap * (n - 2))) / (n - 1)
+        for i = 2, n do
+            local y_off = ty + ((i - 2) * (s_h + gap))
+            wm.move_window(HyprWin.windows[i], s_x, y_off, s_w, s_h)
         end
     end
 end
