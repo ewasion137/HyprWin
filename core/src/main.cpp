@@ -127,13 +127,38 @@ int main() {
       return std::string(class_name);
     });
 
-    wm.set_function(
-        "move_window", [](size_t hwnd, double x, double y, double w, double h) {
-          // Added SWP_NOZORDER to keep our overlay on top, but removed
-          // SWP_NOACTIVATE if you want the tiled window to actually be usable
-          SetWindowPos((HWND)hwnd, HWND_BOTTOM, (int)x, (int)y, (int)w, (int)h,
-                       SWP_NOACTIVATE | SWP_FRAMECHANGED);
-        });
+    wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
+                                      double h) {
+      HWND handle = (HWND)hwnd;
+
+      // Get the logical window rect (including invisible shadows)
+      RECT windowRect;
+      GetWindowRect(handle, &windowRect);
+
+      // Get the actual visible frame bounds
+      RECT frameRect;
+      if (SUCCEEDED(DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS,
+                                          &frameRect, sizeof(RECT)))) {
+        // Calculate the invisible border thickness
+        int leftMargin = frameRect.left - windowRect.left;
+        int topMargin = frameRect.top - windowRect.top;
+        int rightMargin = windowRect.right - frameRect.right;
+        int bottomMargin = windowRect.bottom - frameRect.bottom;
+
+        // Adjust target coordinates to compensate for those invisible borders
+        int finalX = (int)x - leftMargin;
+        int finalY = (int)y - topMargin;
+        int finalW = (int)w + leftMargin + rightMargin;
+        int finalH = (int)h + topMargin + bottomMargin;
+
+        SetWindowPos(handle, NULL, finalX, finalY, finalW, finalH,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+      } else {
+        // Fallback if DWM fails
+        SetWindowPos(handle, NULL, (int)x, (int)y, (int)w, (int)h,
+                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+      }
+    });
 
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
