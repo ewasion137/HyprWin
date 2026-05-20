@@ -91,11 +91,6 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
             HyprWin.retile()
         end
     end
-
-    -- 0x0003: Foreground Change
-    if event_type == 0x0003 then
-        HyprWin.focused_window = hwnd
-    end
 end
 
 -- Border rendering with safety checks
