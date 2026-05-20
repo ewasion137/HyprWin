@@ -1,121 +1,104 @@
--- scripts/main.lua
-
 HyprWin = {}
 HyprWin.windows = {}
 HyprWin.focused_window = nil
+local is_retiling = false
 
--- Basic Master/Stack layout recalculation
+-- Helper to check if window still exists and is visible
+local function is_valid(hwnd)
+    return wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd)
+end
+
+-- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
+    -- Clean up invalid windows from list before tiling
+    local active_windows = {}
+    for _, hwnd in ipairs(HyprWin.windows) do
+        if is_valid(hwnd) then
+            table.insert(active_windows, hwnd)
+        end
+    end
+    HyprWin.windows = active_windows
+
     local count = #HyprWin.windows
     if count == 0 then return end
 
     local sw, sh = wm.get_screen_size()
-    local bar_h = 32 -- Height of our top bar
-    local gap = 10
-    local usable_sh = sh - bar_h -- Don't overlap the bar
+    local bar_h = 35 -- Taskbar gap
+    local gap = 12
+    local area_w = sw - (gap * 2)
+    local area_h = sh - bar_h - (gap * 2)
+    local start_y = bar_h + gap
 
+    -- Master-Stack calculation
     if count == 1 then
-        -- Single window should take the full usable area
-        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, sw - (gap * 2), usable_sh - (gap * 2))
+        wm.move_window(HyprWin.windows[1], gap, start_y, area_w, area_h)
     else
-        local master_w = sw // 2
-        -- Master window
-        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, master_w - gap - (gap // 2), usable_sh - (gap * 2))
-
-        -- Stack
-        local stack_count = count - 1
-        local stack_h = (usable_sh - gap) // stack_count
-        local stack_x = master_w + (gap // 2)
+        -- 60% for Master, 40% for Stack
+        local master_w = math.floor(area_w * 0.6)
+        local stack_w = area_w - master_w - gap
         
+        -- Move Master
+        wm.move_window(HyprWin.windows[1], gap, start_y, master_w, area_h)
+        
+        -- Move Stack
+        local stack_h = (area_h - (gap * (count - 2))) / (count - 1)
         for i = 2, count do
-            local y_offset = bar_h + gap + ((i - 2) * stack_h)
-            wm.move_window(HyprWin.windows[i], stack_x, y_offset, sw - stack_x - gap, stack_h - gap)
+            local y_pos = start_y + ((i - 2) * (stack_h + gap))
+            wm.move_window(HyprWin.windows[i], gap + master_w + gap, y_pos, stack_w, stack_h)
         end
     end
 end
 
-local function is_tracked(hwnd)
-    for i, w in ipairs(HyprWin.windows) do
-        if w == hwnd then return true, i end
-    end
-    return false, nil
-end
-
--- Dispatcher called from C++
+-- --- FIXED CODE LOCATOR: event dispatcher ---
 HyprWin.dispatch_event = function(event_type, hwnd, title)
-    -- Ignore windows with NO title immediately to stop console spam
-    if title == nil or title == "" or title == " " then
-        return
-    end
-
-    local class = wm.get_class_name(hwnd)
-    
-    -- Added more garbage classes to ignore
-    if class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") 
-       or class == "HyprWinOverlay" or class == "GhostWindow" then
-        return
-    end
-
-    -- Capture: 0x8002 (Show), 0x0017 (Restore), 0x800C (NameChange)
-    if event_type == 0x8002 or event_type == 0x0017 or event_type == 0x800C then
-        local tracked, _ = is_tracked(hwnd)
-        -- Extra check: only track if the title is actually "real"
-        if title ~= "Program Manager" and not tracked then
-            log("Tracking window: [" .. title .. "]")
+    -- 0x8002: Show, 0x0017: Restore
+    if event_type == 0x8002 or event_type == 0x0017 then
+        local found = false
+        for _, h in ipairs(HyprWin.windows) do if h == hwnd then found = true break end end
+        
+        if not found and title ~= "" then
+            -- Small delay to let Windows finish window creation
+            log("Capturing: " .. title)
             table.insert(HyprWin.windows, hwnd)
             HyprWin.retile()
         end
     end
 
-    -- Release: EVENT_OBJECT_DESTROY (0x8001) or EVENT_SYSTEM_MINIMIZESTART (0x0016)
-    -- Ignore EVENT_OBJECT_HIDE (0x8003) as it fires too often for background apps
-    if event_type == 0x8001 or event_type == 0x0016 then
-        local tracked, index = is_tracked(hwnd)
-        if tracked then
-            log("Untracking window: HWND: " .. hwnd)
-            table.remove(HyprWin.windows, index)
-            if HyprWin.focused_window == hwnd then HyprWin.focused_window = nil end
-            HyprWin.retile()
+    -- 0x8001: Destroy, 0x8003: Hide, 0x0016: Minimize
+    if event_type == 0x8001 or event_type == 0x8003 or event_type == 0x0016 then
+        for i, h in ipairs(HyprWin.windows) do
+            if h == hwnd then
+                log("Releasing window handle")
+                table.remove(HyprWin.windows, i)
+                HyprWin.retile()
+                break
+            end
         end
     end
 
-    -- Focus
+    -- 0x0003: Foreground Change
     if event_type == 0x0003 then
         HyprWin.focused_window = hwnd
     end
 end
 
+-- Border rendering with safety checks
 HyprWin.on_render = function()
-    -- Draw borders around tracked windows
     for _, hwnd in ipairs(HyprWin.windows) do
-        -- Only draw border if window is actually visible and not minimized
-        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) then
+        if is_valid(hwnd) then
             local x, y, w, h = wm.get_window_rect(hwnd)
-            
-            -- Check if we successfully got rect
-            if w > 0 and h > 0 then
+            if w > 0 then
                 if hwnd == HyprWin.focused_window then
-                    -- Active window border (Red)
-                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 1.0, 0.2, 0.2, 1.0, 3.0)
+                    ui.draw_rect(x, y, w, h, 1.0, 0.3, 0.3, 1.0, 3.0) -- Active: Red
                 else
-                    -- Inactive window border (Gray)
-                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 0.5, 0.5, 0.5, 0.8, 2.0)
+                    ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.5, 1.0) -- Inactive: Dark
                 end
             end
         end
     end
 end
 
--- On startup, scan for already open windows
+-- Initial scan
 local existing = wm.enumerate_windows()
-for _, hwnd in ipairs(existing) do
-    local class = wm.get_class_name(hwnd)
-    -- Ignore known system junk and our own overlay window
-    if not (class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") or class == "HyprWinOverlay") then
-        log("Tracking existing window on startup: Class: " .. class)
-        table.insert(HyprWin.windows, hwnd)
-    end
-end
+HyprWin.windows = existing
 HyprWin.retile()
-
-log("HyprWin: Tiling engine and renderer ready.")
