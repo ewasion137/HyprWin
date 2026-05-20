@@ -10,7 +10,6 @@ end
 
 -- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
-    -- Clean up invalid windows from list before tiling
     local active_windows = {}
     for _, hwnd in ipairs(HyprWin.windows) do
         if is_valid(hwnd) then
@@ -20,6 +19,8 @@ HyprWin.retile = function()
     HyprWin.windows = active_windows
 
     local count = #HyprWin.windows
+    log("RETILE: Processing " .. count .. " windows") -- Diagnostic log
+
     if count == 0 then return end
 
     local sw, sh = wm.get_screen_size()
