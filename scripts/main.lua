@@ -43,19 +43,25 @@ end
 
 -- Dispatcher called from C++
 HyprWin.dispatch_event = function(event_type, hwnd, title)
-    local class = wm.get_class_name(hwnd)
-    
-    -- Filter out junk
-    if class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") or class == "HyprWinOverlay" then
+    -- Ignore windows with NO title immediately to stop console spam
+    if title == nil or title == "" or title == " " then
         return
     end
 
-    -- Capture: Use ONLY EVENT_OBJECT_SHOW (0x8002) for new windows
-    -- Use EVENT_SYSTEM_MINIMIZEEND (0x0017) for restored windows
-    if event_type == 0x8002 or event_type == 0x0017 then
+    local class = wm.get_class_name(hwnd)
+    
+    -- Added more garbage classes to ignore
+    if class == "Chrome_ChildWin_Templ" or class:find("Tip") or class:find("Menu") 
+       or class == "HyprWinOverlay" or class == "GhostWindow" then
+        return
+    end
+
+    -- Capture: 0x8002 (Show), 0x0017 (Restore), 0x800C (NameChange)
+    if event_type == 0x8002 or event_type == 0x0017 or event_type == 0x800C then
         local tracked, _ = is_tracked(hwnd)
-        if title ~= "" and title ~= "Program Manager" and not tracked then
-            log("Tracking window: [" .. title .. "] HWND: " .. hwnd)
+        -- Extra check: only track if the title is actually "real"
+        if title ~= "Program Manager" and not tracked then
+            log("Tracking window: [" .. title .. "]")
             table.insert(HyprWin.windows, hwnd)
             HyprWin.retile()
         end
