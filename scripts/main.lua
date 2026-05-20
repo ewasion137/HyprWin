@@ -102,18 +102,23 @@ end
 
 -- Border rendering with safety checks
 HyprWin.on_render = function()
+    -- Only draw borders for windows we actually track
     for _, hwnd in ipairs(HyprWin.windows) do
-        if is_valid(hwnd) then
-            local x, y, w, h = wm.get_window_rect(hwnd)
-            if w > 0 then
-                if hwnd == HyprWin.focused_window then
-                    ui.draw_rect(x, y, w, h, 1.0, 0.3, 0.3, 1.0, 3.0) -- Active: Red
-                else
-                    ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.5, 1.0) -- Inactive: Dark
-                end
+        local x, y, w, h = wm.get_window_rect(hwnd)
+        if w > 0 then
+            -- Active window gets a thicker, brighter border
+            if hwnd == HyprWin.focused_window then
+                ui.draw_rect(x, y, w, h, 0.7, 0.4, 1.0, 1.0, 3.0) 
+            else
+                ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.8, 1.0)
             end
         end
     end
+    
+    -- Simple Top Bar
+    local sw, _ = wm.get_screen_size()
+    ui.fill_rect(0, 0, sw, 30, 0.02, 0.02, 0.02, 0.9)
+    ui.fill_rect(0, 30, sw, 2, 0.7, 0.4, 1.0, 1.0)
 end
 
 -- Initial scan
