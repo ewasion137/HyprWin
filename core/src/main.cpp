@@ -30,37 +30,36 @@ bool IsToplevelWindow(HWND hwnd) {
   if (pid == GetCurrentProcessId())
     return false;
 
-  char class_name[256] = {0};
-  GetClassNameA(hwnd, class_name, sizeof(class_name));
-  if (strcmp(class_name, "HyprWinOverlay") == 0)
-    return false;
-
+  // Get styles
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
   HWND owner = GetWindow(hwnd, GW_OWNER);
 
+  // --- FIXED LOGIC START ---
+  // A window is valid for tiling if:
+  // 1. It has WS_EX_APPWINDOW (explicitly meant for taskbar)
+  // 2. OR it has WS_CAPTION AND no owner (regular top-level window)
+  // 3. AND it's not a TOOLWINDOW
+  bool isAppWindow = (ex_style & WS_EX_APPWINDOW);
+  bool isTopLevel = (style & WS_CAPTION) && (owner == NULL);
+
   if (ex_style & WS_EX_TOOLWINDOW)
     return false;
-  if (owner != NULL)
+  if (!isAppWindow && !isTopLevel)
     return false;
-  if (!(style & WS_CAPTION))
-    return false;
+  // --- FIXED LOGIC END ---
 
-  // Filter out cloaked windows (suspended UWP apps, virtual desktops, background apps)
+  // Filter out cloaked (Virtual Desktops / Suspended UWP)
   int cloaked = 0;
-  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0) {
+  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked,
+                                      sizeof(cloaked))) &&
+      cloaked != 0) {
     return false;
   }
 
   RECT rect;
   GetWindowRect(hwnd, &rect);
-  if ((rect.right - rect.left) <= 1 || (rect.bottom - rect.top) <= 1)
-    return false;
-
-  // Filter out windows with empty titles (helper/invisible utility windows)
-  char title[256] = {0};
-  GetWindowTextA(hwnd, title, sizeof(title));
-  if (strlen(title) == 0)
+  if ((rect.right - rect.left) <= 10 || (rect.bottom - rect.top) <= 10)
     return false;
 
   return true;
