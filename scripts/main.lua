@@ -7,30 +7,29 @@ HyprWin.focused_window = nil
 -- Basic Master/Stack layout recalculation
 HyprWin.retile = function()
     local count = #HyprWin.windows
-    log("Retile starting. Total windows in layout: " .. count)
     if count == 0 then return end
 
     local sw, sh = wm.get_screen_size()
-    local gap = 10 -- Padding between windows
+    local bar_h = 32 -- Height of our top bar
+    local gap = 10
+    local usable_sh = sh - bar_h -- Don't overlap the bar
 
     if count == 1 then
-        log("Retiling 1 window: hwnd = " .. HyprWin.windows[1] .. " -> full screen")
-        wm.move_window(HyprWin.windows[1], gap, gap, sw - (gap * 2), sh - (gap * 2))
+        -- Single window should take the full usable area
+        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, sw - (gap * 2), usable_sh - (gap * 2))
     else
         local master_w = sw // 2
-        local half_gap = gap // 2
-        log("Retiling Master: hwnd = " .. HyprWin.windows[1] .. " -> x: " .. gap .. ", y: " .. gap .. ", w: " .. (master_w - gap - half_gap) .. ", h: " .. (sh - gap * 2))
-        wm.move_window(HyprWin.windows[1], gap, gap, master_w - gap - half_gap, sh - (gap * 2))
+        -- Master window
+        wm.move_window(HyprWin.windows[1], gap, bar_h + gap, master_w - gap - (gap // 2), usable_sh - (gap * 2))
 
+        -- Stack
         local stack_count = count - 1
-        local stack_h = (sh - gap) // stack_count
-        local stack_x = master_w + half_gap
+        local stack_h = (usable_sh - gap) // stack_count
+        local stack_x = master_w + (gap // 2)
         
         for i = 2, count do
-            local y_offset = gap + ((i - 2) * stack_h)
-            local current_h = stack_h - gap
-            log("Retiling Stack [" .. i .. "]: hwnd = " .. HyprWin.windows[i] .. " -> x: " .. stack_x .. ", y: " .. y_offset .. ", w: " .. (sw - stack_x - gap) .. ", h: " .. current_h)
-            wm.move_window(HyprWin.windows[i], stack_x, y_offset, sw - stack_x - gap, current_h)
+            local y_offset = bar_h + gap + ((i - 2) * stack_h)
+            wm.move_window(HyprWin.windows[i], stack_x, y_offset, sw - stack_x - gap, stack_h - gap)
         end
     end
 end
