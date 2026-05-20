@@ -30,16 +30,16 @@ bool IsToplevelWindow(HWND hwnd) {
   if (pid == GetCurrentProcessId())
     return false;
 
-  // Get styles
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
   HWND owner = GetWindow(hwnd, GW_OWNER);
 
   // --- FIXED LOGIC START ---
-  // A window is valid for tiling if:
-  // 1. It has WS_EX_APPWINDOW (explicitly meant for taskbar)
-  // 2. OR it has WS_CAPTION AND no owner (regular top-level window)
-  // 3. AND it's not a TOOLWINDOW
+  // 1. If window is TOPMOST (PiP, Overlays) - IGNORE IT
+  if (ex_style & WS_EX_TOPMOST)
+    return false;
+
+  // 2. Standard Top-Level requirements
   bool isAppWindow = (ex_style & WS_EX_APPWINDOW);
   bool isTopLevel = (style & WS_CAPTION) && (owner == NULL);
 
@@ -49,18 +49,12 @@ bool IsToplevelWindow(HWND hwnd) {
     return false;
   // --- FIXED LOGIC END ---
 
-  // Filter out cloaked (Virtual Desktops / Suspended UWP)
   int cloaked = 0;
   if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked,
                                       sizeof(cloaked))) &&
       cloaked != 0) {
     return false;
   }
-
-  RECT rect;
-  GetWindowRect(hwnd, &rect);
-  if ((rect.right - rect.left) <= 10 || (rect.bottom - rect.top) <= 10)
-    return false;
 
   return true;
 }
