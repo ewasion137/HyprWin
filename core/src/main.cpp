@@ -131,6 +131,9 @@ int main() {
                                       double h) {
       HWND handle = (HWND)hwnd;
       RECT windowRect;
+      if (IsZoomed(handle)) {
+        ShowWindow(handle, SW_RESTORE);
+      }
       GetWindowRect(handle, &windowRect);
 
       RECT frameRect;
