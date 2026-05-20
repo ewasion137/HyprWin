@@ -131,32 +131,31 @@ int main() {
     wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
                                       double h) {
       HWND handle = (HWND)hwnd;
-
-      // Get the logical window rect (including invisible shadows)
       RECT windowRect;
       GetWindowRect(handle, &windowRect);
 
-      // Get the actual visible frame bounds
       RECT frameRect;
       if (SUCCEEDED(DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS,
                                           &frameRect, sizeof(RECT)))) {
-        // Calculate the invisible border thickness
         int leftMargin = frameRect.left - windowRect.left;
         int topMargin = frameRect.top - windowRect.top;
         int rightMargin = windowRect.right - frameRect.right;
         int bottomMargin = windowRect.bottom - frameRect.bottom;
 
-        // Adjust target coordinates to compensate for those invisible borders
         int finalX = (int)x - leftMargin;
         int finalY = (int)y - topMargin;
         int finalW = (int)w + leftMargin + rightMargin;
         int finalH = (int)h + topMargin + bottomMargin;
 
+        // --- ADDED DEBUG LOG ---
+        char title[128];
+        GetWindowTextA(handle, title, sizeof(title));
+        std::cout << "[RESIZE] Win: " << title << " | HWND: " << handle
+                  << " | Target: " << (int)x << "," << (int)y << " " << (int)w
+                  << "x" << (int)h << " | Actual: " << finalX << "," << finalY
+                  << " " << finalW << "x" << finalH << std::endl;
+
         SetWindowPos(handle, NULL, finalX, finalY, finalW, finalH,
-                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-      } else {
-        // Fallback if DWM fails
-        SetWindowPos(handle, NULL, (int)x, (int)y, (int)w, (int)h,
                      SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
       }
     });
