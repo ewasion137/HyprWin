@@ -32,41 +32,39 @@ end
 
 -- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
-    -- Filter dead handles
-    local active = {}
-    for _, h in ipairs(HyprWin.windows) do
-        if wm.is_window_visible(h) and not wm.is_minimized(h) then
-            table.insert(active, h)
+    -- Deep clean the list before every math operation
+    local valid_windows = {}
+    for _, hwnd in ipairs(HyprWin.windows) do
+        -- Only keep windows that are actually visible and NOT minimized
+        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) then
+            table.insert(valid_windows, hwnd)
         end
     end
-    HyprWin.windows = active
+    HyprWin.windows = valid_windows
 
     local n = #HyprWin.windows
     if n == 0 then return end
 
     local sw, sh = wm.get_screen_size()
-    local gap = 10
+    local gap = 15
     local bar_h = 35
     
-    -- Calculation area
-    local tx = gap
-    local ty = bar_h + gap
-    local tw = sw - (gap * 2)
-    local th = sh - bar_h - (gap * 2)
+    -- Correct work area
+    local tx, ty = gap, bar_h + gap
+    local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
 
     if n == 1 then
+        -- Fullscreen tile (No more squashing!)
         wm.move_window(HyprWin.windows[1], tx, ty, tw, th)
     else
-        -- Mathematical split: Master gets 50%, Stack gets 50%
-        local m_w = (tw - gap) / 2
-        local s_w = tw - m_w - gap
-        local s_x = tx + m_w + gap
+        -- Master-Stack math
+        local m_w = math.floor(tw * 0.5)
+        wm.move_window(HyprWin.windows[1], tx, ty, m_w - (gap / 2), th)
 
-        -- Master window
-        wm.move_window(HyprWin.windows[1], tx, ty, m_w, th)
-
-        -- Stack windows split height equally
+        local s_x = tx + m_w + (gap / 2)
+        local s_w = sw - s_x - gap
         local s_h = (th - (gap * (n - 2))) / (n - 1)
+
         for i = 2, n do
             local y_off = ty + ((i - 2) * (s_h + gap))
             wm.move_window(HyprWin.windows[i], s_x, y_off, s_w, s_h)
