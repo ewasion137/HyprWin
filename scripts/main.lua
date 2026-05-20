@@ -8,6 +8,21 @@ local function is_valid(hwnd)
     return wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd)
 end
 
+local window_rules = {
+    float = { "Telegram", "Picture-in-picture", "Calculator", "Картинка в картинке" },
+    ignore_classes = { "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow" }
+}
+
+local function should_ignore(hwnd, title, class)
+    for _, pattern in ipairs(window_rules.ignore_classes) do
+        if class:find(pattern) then return true end
+    end
+    for _, pattern in ipairs(window_rules.float) do
+        if title:find(pattern) then return true end
+    end
+    return false
+end
+
 -- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
     local active_windows = {}
