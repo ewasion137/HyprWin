@@ -96,6 +96,11 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
     sol::protected_function dispatcher = (*g_lua)["HyprWin"]["dispatch_event"];
     if (dispatcher.valid()) {
       auto result = dispatcher(event, (size_t)hwnd, std::string(title));
+      if (event == EVENT_SYSTEM_FOREGROUND) {
+        sol::protected_function retile = (*g_lua)["HyprWin"]["retile"];
+        if (retile.valid())
+          retile();
+      }
       if (!result.valid()) {
         sol::error err = result;
         std::cerr << "!!! LUA EVENT ERROR: " << err.what() << std::endl;
