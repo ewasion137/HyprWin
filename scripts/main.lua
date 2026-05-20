@@ -13,6 +13,13 @@ local window_rules = {
     ignore_classes = { "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow" }
 }
 
+local function is_tracked(hwnd)
+    for i, w in ipairs(HyprWin.windows) do
+        if w == hwnd then return i end
+    end
+    return nil
+end
+
 local function should_ignore(hwnd, title, class)
     for _, pattern in ipairs(window_rules.ignore_classes) do
         if class:find(pattern) then return true end
