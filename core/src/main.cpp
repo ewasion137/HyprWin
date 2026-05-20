@@ -147,16 +147,11 @@ int main() {
         int finalW = (int)w + leftMargin + rightMargin;
         int finalH = (int)h + topMargin + bottomMargin;
 
-        // --- ADDED DEBUG LOG ---
-        char title[128];
-        GetWindowTextA(handle, title, sizeof(title));
-        std::cout << "[RESIZE] Win: " << title << " | HWND: " << handle
-                  << " | Target: " << (int)x << "," << (int)y << " " << (int)w
-                  << "x" << (int)h << " | Actual: " << finalX << "," << finalY
-                  << " " << finalW << "x" << finalH << std::endl;
-
-        SetWindowPos(handle, NULL, finalX, finalY, finalW, finalH,
-                     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        // Use HWND_NOTOPMOST to keep windows below our TOPMOST overlay
+        // Remove SWP_NOACTIVATE to ensure the window actually moves even if not
+        // focused
+        SetWindowPos(handle, HWND_NOTOPMOST, finalX, finalY, finalW, finalH,
+                     SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
       }
     });
 
