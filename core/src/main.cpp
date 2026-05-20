@@ -72,6 +72,8 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   if (idObject != OBJID_WINDOW || idChild != CHILDID_SELF || hwnd == NULL)
     return;
 
+  if (event == 0x800B || event == 0x800A)
+    return;
   // Bypass visibility/toplevel checks for destroy, hide, and minimize events since the window
   // is no longer fully valid/visible at this stage, but we still need to untrack it.
   bool is_destroy_or_hide = (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE || event == EVENT_SYSTEM_MINIMIZESTART);
