@@ -174,5 +174,40 @@ for _, hwnd in ipairs(existing) do
         table.insert(filtered, hwnd)
     end
 end
+
+HyprWin.on_hotkey = function(id)
+    if id >= 101 and id <= 109 then
+        -- Switch Workspace (Alt + 1..9)
+        local target_ws = id - 100
+        if target_ws ~= HyprWin.current_workspace then
+            HyprWin.current_workspace = target_ws
+            log("Switched to Workspace " .. target_ws)
+            HyprWin.retile()
+        end
+    elseif id >= 201 and id <= 209 then
+        -- Move Window to Workspace (Alt + Shift + 1..9)
+        local target_ws = id - 200
+        local focused = HyprWin.focused_window
+        if focused then
+            HyprWin.window_workspaces[focused] = target_ws
+            log("Moved window " .. focused .. " to Workspace " .. target_ws)
+            HyprWin.retile()
+        end
+    elseif id == 301 then
+        -- Toggle Floating State (Alt + F)
+        local focused = HyprWin.focused_window
+        if focused then
+            if HyprWin.floating_windows[focused] then
+                HyprWin.floating_windows[focused] = nil
+                log("Window " .. focused .. " is now Tiled")
+            else
+                HyprWin.floating_windows[focused] = true
+                log("Window " .. focused .. " is now Floating")
+            end
+            HyprWin.retile()
+        end
+    end
+end
+
 HyprWin.windows = filtered
 HyprWin.retile()
