@@ -47,7 +47,28 @@ HyprWin.retile = function()
     end
     HyprWin.windows = valid_windows
 
-    local n = #HyprWin.windows
+    -- Ensure every window is assigned to a workspace
+    for _, hwnd in ipairs(HyprWin.windows) do
+        if not HyprWin.window_workspaces[hwnd] then
+            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+        end
+    end
+
+    -- Filter active workspace and non-floating windows
+    local active_workspace_windows = {}
+    for _, hwnd in ipairs(HyprWin.windows) do
+        local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+        if ws == HyprWin.current_workspace then
+            if not HyprWin.floating_windows[hwnd] then
+                table.insert(active_workspace_windows, hwnd)
+            end
+        else
+            -- Move off-screen to hide from view without minimizing
+            wm.move_window(hwnd, -32000, -32000, 800, 600)
+        end
+    end
+
+    local n = #active_workspace_windows
     if n == 0 then return end
 
     local sw, sh = wm.get_screen_size()
@@ -61,7 +82,7 @@ HyprWin.retile = function()
     -- Recursive BSP splitting (Hyprland dwindle concept)
     local function recursive_tile(x, y, w, h, first, last)
         if first == last then
-            wm.move_window(HyprWin.windows[first], x, y, w, h)
+            wm.move_window(active_workspace_windows[first], x, y, w, h)
             return
         end
 
