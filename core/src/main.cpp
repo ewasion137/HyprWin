@@ -159,11 +159,9 @@ int main() {
         int finalW = (int)w + leftMargin + rightMargin;
         int finalH = (int)h + topMargin + bottomMargin;
 
-        // Use HWND_NOTOPMOST to keep windows below our TOPMOST overlay
-        // Remove SWP_NOACTIVATE to ensure the window actually moves even if not
-        // focused
+        // Use SWP_NOACTIVATE and SWP_NOSENDCHANGING to optimize drawing
         SetWindowPos(handle, HWND_NOTOPMOST, finalX, finalY, finalW, finalH,
-                     SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+                     SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       }
     });
 

@@ -82,6 +82,11 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     -- 0x0003: Focus changed
     if event_type == 0x0003 then
         HyprWin.focused_window = hwnd
+        -- Catch window on focus if we missed its show event
+        if not is_tracked(hwnd) and is_valid(hwnd) then
+            table.insert(HyprWin.windows, hwnd)
+            HyprWin.retile()
+        end
         return
     end
 
@@ -98,6 +103,7 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         local idx = is_tracked(hwnd)
         if idx then
             table.remove(HyprWin.windows, idx)
+            log("Untracked window: " .. hwnd .. " | Remaining: " .. #HyprWin.windows)
             if HyprWin.focused_window == hwnd then
                 HyprWin.focused_window = nil
             end
