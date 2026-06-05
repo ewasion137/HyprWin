@@ -144,26 +144,52 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
 end
 
 -- Border rendering with safety checks
+-- Border rendering with safety checks
 HyprWin.on_render = function()
-    -- Only draw borders for windows we actually track
+    -- Only draw borders for windows we actually track on the current workspace
     for _, hwnd in ipairs(HyprWin.windows) do
-        local x, y, w, h = wm.get_window_rect(hwnd)
-        if w > 0 then
-            -- Active window gets a thicker, brighter border
-            if hwnd == HyprWin.focused_window then
-                ui.draw_rect(x, y, w, h, 0.7, 0.4, 1.0, 1.0, 3.0) 
-            else
-                ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.8, 1.0)
+        local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+        if ws == HyprWin.current_workspace then
+            local x, y, w, h = wm.get_window_rect(hwnd)
+            if w > 0 then
+                -- Active window gets a thicker, brighter border
+                if hwnd == HyprWin.focused_window then
+                    ui.draw_rect(x, y, w, h, 0.7, 0.4, 1.0, 1.0, 3.0) 
+                else
+                    -- Floating windows get a distinct orange border
+                    if HyprWin.floating_windows[hwnd] then
+                        ui.draw_rect(x, y, w, h, 0.9, 0.6, 0.2, 0.8, 1.5)
+                    else
+                        ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.8, 1.0)
+                    end
+                end
             end
         end
     end
     
     -- Simple Top Bar
     local sw, _ = wm.get_screen_size()
-    ui.fill_rect(0, 0, sw, 30, 0.02, 0.02, 0.02, 0.9)
-    ui.fill_rect(0, 30, sw, 2, 0.7, 0.4, 1.0, 1.0)
-end
+    ui.fill_rect(0, 0, sw, 35, 0.02, 0.02, 0.02, 0.9)
+    ui.fill_rect(0, 35, sw, 2, 0.7, 0.4, 1.0, 1.0)
 
+    -- Render workspace indicators
+    local ind_w = 20
+    local ind_h = 14
+    local start_x = 15
+    local start_y = 10
+    local gap_x = 8
+
+    for i = 1, 9 do
+        local x = start_x + (i - 1) * (ind_w + gap_x)
+        if i == HyprWin.current_workspace then
+            -- Active workspace in bright purple
+            ui.fill_rect(x, start_y, ind_w, ind_h, 0.7, 0.4, 1.0, 1.0)
+        else
+            -- Inactive workspaces in dark gray
+            ui.fill_rect(x, start_y, ind_w, ind_h, 0.15, 0.15, 0.15, 0.8)
+        end
+    end
+end
 -- Initial scan
 local existing = wm.enumerate_windows()
 local filtered = {}
