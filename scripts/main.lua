@@ -1,6 +1,9 @@
 HyprWin = {}
 HyprWin.windows = {}
 HyprWin.focused_window = nil
+HyprWin.current_workspace = 1
+HyprWin.window_workspaces = {} -- Tracks workspace ID for each hwnd
+HyprWin.floating_windows = {}  -- Tracks floating state for each hwnd (boolean)
 local is_retiling = false
 
 -- Helper to check if window still exists and is visible

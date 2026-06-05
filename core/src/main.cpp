@@ -317,6 +317,14 @@ int main() {
     std::cout << "HyprWin: Window hook registered. Monitoring windows..."
               << std::endl;
 
+    // Register hotkeys for Workspaces (Alt + 1..9) and moving windows (Alt + Shift + 1..9)
+    for (int i = 1; i <= 9; ++i) {
+      RegisterHotKey(NULL, 101 + (i - 1), MOD_ALT, '0' + i);
+      RegisterHotKey(NULL, 201 + (i - 1), MOD_ALT | MOD_SHIFT, '0' + i);
+    }
+    // Register Alt + F to toggle Floating state
+    RegisterHotKey(NULL, 301, MOD_ALT, 'F');
+
     // Message loop is REQUIRED for hooks to work
     MSG msg;
     while (true) {
@@ -324,6 +332,21 @@ int main() {
       if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT)
           break;
+
+        if (msg.message == WM_HOTKEY) {
+          int hotkey_id = (int)msg.wParam;
+          if (g_lua) {
+            sol::protected_function on_hotkey = (*g_lua)["HyprWin"]["on_hotkey"];
+            if (on_hotkey.valid()) {
+              auto result = on_hotkey(hotkey_id);
+              if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "!!! LUA HOTKEY ERROR: " << err.what() << std::endl;
+              }
+            }
+          }
+        }
+
         TranslateMessage(&msg);
         DispatchMessage(&msg);
       }
@@ -334,6 +357,11 @@ int main() {
         render_func();
       }
     }
+
+    // Unregister hotkeys on exit
+    for (int i = 101; i <= 109; ++i) UnregisterHotKey(NULL, i);
+    for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
+    UnregisterHotKey(NULL, 301);
 
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
