@@ -10,7 +10,6 @@
 #include <string> // Added for std::string
 #include <windows.h>
 
-
 // --- FIXED CODE LOCATOR: Header order ---
 extern "C" {
 #include <lauxlib.h>
@@ -68,10 +67,13 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
 
   if (event == 0x800B || event == 0x800A)
     return;
-  // Bypass visibility/toplevel checks for destroy, hide, and minimize events since the window
-  // is no longer fully valid/visible at this stage, but we still need to untrack it.
-  bool is_destroy_or_hide = (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE || event == EVENT_SYSTEM_MINIMIZESTART);
-  
+  // Bypass visibility/toplevel checks for destroy, hide, and minimize events
+  // since the window is no longer fully valid/visible at this stage, but we
+  // still need to untrack it.
+  bool is_destroy_or_hide =
+      (event == EVENT_OBJECT_DESTROY || event == EVENT_OBJECT_HIDE ||
+       event == EVENT_SYSTEM_MINIMIZESTART);
+
   if (!is_destroy_or_hide) {
     if (!IsWindowVisible(hwnd) || !IsToplevelWindow(hwnd))
       return;
@@ -83,8 +85,8 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
     GetWindowTextA(hwnd, title, sizeof(title));
 
     // Log the caught event to console for debugging
-    std::cout << "[Hook Event] HWND: 0x" << std::hex << (size_t)hwnd << std::dec 
-              << " | Event: 0x" << std::hex << event << std::dec 
+    std::cout << "[Hook Event] HWND: 0x" << std::hex << (size_t)hwnd << std::dec
+              << " | Event: 0x" << std::hex << event << std::dec
               << " | Title: " << title << std::endl;
 
     sol::protected_function dispatcher = (*g_lua)["HyprWin"]["dispatch_event"];
@@ -100,7 +102,8 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
         std::cerr << "!!! LUA EVENT ERROR: " << err.what() << std::endl;
       }
     } else {
-      std::cerr << "!!! LUA WARNING: HyprWin.dispatch_event is not defined!" << std::endl;
+      std::cerr << "!!! LUA WARNING: HyprWin.dispatch_event is not defined!"
+                << std::endl;
     }
   }
 }
@@ -113,7 +116,8 @@ int main() {
     g_lua = &lua;
 
     // Open standard libraries safely
-    lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string, sol::lib::math, sol::lib::table);
+    lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string,
+                       sol::lib::math, sol::lib::table);
 
     // Bind a C++ function to Lua
     lua.set_function("log", [](std::string message) {
@@ -125,6 +129,12 @@ int main() {
       char class_name[256] = {0};
       GetClassNameA((HWND)hwnd, class_name, sizeof(class_name));
       return std::string(class_name);
+    });
+
+    wm.set_function("get_window_title", [](size_t hwnd) {
+      char title[256] = {0};
+      GetWindowTextA((HWND)hwnd, title, sizeof(title));
+      return std::string(title);
     });
 
     wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
@@ -182,19 +192,20 @@ int main() {
       return (bool)IsWindowVisible((HWND)hwnd);
     });
 
-    wm.set_function("is_minimized", [](size_t hwnd) {
-      return (bool)IsIconic((HWND)hwnd);
-    });
+    wm.set_function("is_minimized",
+                    [](size_t hwnd) { return (bool)IsIconic((HWND)hwnd); });
 
     wm.set_function("enumerate_windows", []() {
       std::vector<size_t> hwnds;
-      EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-        auto list = (std::vector<size_t>*)lParam;
-        if (IsWindowVisible(hwnd) && IsToplevelWindow(hwnd)) {
-          list->push_back((size_t)hwnd);
-        }
-        return TRUE;
-      }, (LPARAM)&hwnds);
+      EnumWindows(
+          [](HWND hwnd, LPARAM lParam) -> BOOL {
+            auto list = (std::vector<size_t> *)lParam;
+            if (IsWindowVisible(hwnd) && IsToplevelWindow(hwnd)) {
+              list->push_back((size_t)hwnd);
+            }
+            return TRUE;
+          },
+          (LPARAM)&hwnds);
       return hwnds;
     });
     auto ui = lua.create_named_table("ui");
@@ -275,15 +286,17 @@ int main() {
     sol::protected_function_result result = lua.script_file(script_path);
     if (!result.valid()) {
       sol::error err = result;
-      std::cerr << "!!! LUA SCRIPT ERROR: Failed to load/run " << script_path << std::endl;
+      std::cerr << "!!! LUA SCRIPT ERROR: Failed to load/run " << script_path
+                << std::endl;
       std::cerr << "Details: " << err.what() << std::endl;
       std::cout << "Press Enter to exit..." << std::endl;
       std::cin.get();
       return 1;
     }
     std::cout << "HyprWin: Lua script loaded successfully!" << std::endl;
-    
-    // Hook for window creation, destruction, show, hide and namechange events (0x8000 to 0x800C)
+
+    // Hook for window creation, destruction, show, hide and namechange events
+    // (0x8000 to 0x800C)
     HWINEVENTHOOK hook_objects =
         SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_NAMECHANGE, NULL,
                         WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
@@ -295,8 +308,8 @@ int main() {
 
     // Hook for system minimize/restore events (0x0016 to 0x0017)
     HWINEVENTHOOK hook_minimize =
-        SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, NULL,
-                        WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+        SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND,
+                        NULL, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
 
     if (!hook_objects || !hook_focus || !hook_minimize) {
       std::cerr << "HyprWin: Failed to register WinEventHooks!" << std::endl;
@@ -327,7 +340,7 @@ int main() {
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
     UnhookWinEvent(hook_minimize);
-    
+
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
     }
