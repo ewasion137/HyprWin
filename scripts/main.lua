@@ -55,23 +55,30 @@ HyprWin.retile = function()
     local tx, ty = gap, bar_h + gap
     local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
 
-    if n == 1 then
-        -- Fullscreen tile (No more squashing!)
-        wm.move_window(HyprWin.windows[1], tx, ty, tw, th)
-    else
-        -- Master-Stack math
-        local m_w = math.floor(tw * 0.5)
-        wm.move_window(HyprWin.windows[1], tx, ty, m_w - (gap / 2), th)
+    -- Recursive BSP splitting (Hyprland dwindle concept)
+    local function recursive_tile(x, y, w, h, first, last)
+        if first == last then
+            wm.move_window(HyprWin.windows[first], x, y, w, h)
+            return
+        end
 
-        local s_x = tx + m_w + (gap / 2)
-        local s_w = sw - s_x - gap
-        local s_h = (th - (gap * (n - 2))) / (n - 1)
+        local mid = math.floor((first + last) / 2)
 
-        for i = 2, n do
-            local y_off = ty + ((i - 2) * (s_h + gap))
-            wm.move_window(HyprWin.windows[i], s_x, y_off, s_w, s_h)
+        -- Choose split axis based on aspect ratio
+        if w > h then
+            -- Split vertically (left and right)
+            local w1 = math.floor((w - gap) / 2)
+            recursive_tile(x, y, w1, h, first, mid)
+            recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last)
+        else
+            -- Split horizontally (top and bottom)
+            local h1 = math.floor((h - gap) / 2)
+            recursive_tile(x, y, w, h1, first, mid)
+            recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last)
         end
     end
+
+    recursive_tile(tx, ty, tw, th, 1, n)
 end
 
 -- --- FIXED CODE LOCATOR: event dispatcher ---
