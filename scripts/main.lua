@@ -21,6 +21,8 @@ local function is_tracked(hwnd)
 end
 
 local function should_ignore(hwnd, title, class)
+    title = title or ""
+    class = class or ""
     for _, pattern in ipairs(window_rules.ignore_classes) do
         if class:find(pattern) then return true end
     end
@@ -74,7 +76,15 @@ end
 
 -- --- FIXED CODE LOCATOR: event dispatcher ---
 HyprWin.dispatch_event = function(event_type, hwnd, title)
-    if title == "" or title == nil then return end
+    local class = wm.get_class_name(hwnd)
+    if should_ignore(hwnd, title, class) then return end
+
+    -- 0x0003: Focus changed
+    if event_type == 0x0003 then
+        HyprWin.focused_window = hwnd
+        return
+    end
+
     -- 0x8002: Show, 0x0017: Restore
     if event_type == 0x8002 or event_type == 0x0017 then
         if not is_tracked(hwnd) then
@@ -88,6 +98,9 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         local idx = is_tracked(hwnd)
         if idx then
             table.remove(HyprWin.windows, idx)
+            if HyprWin.focused_window == hwnd then
+                HyprWin.focused_window = nil
+            end
             HyprWin.retile()
         end
     end
@@ -116,5 +129,13 @@ end
 
 -- Initial scan
 local existing = wm.enumerate_windows()
-HyprWin.windows = existing
+local filtered = {}
+for _, hwnd in ipairs(existing) do
+    local title = wm.get_window_title(hwnd)
+    local class = wm.get_class_name(hwnd)
+    if not should_ignore(hwnd, title, class) then
+        table.insert(filtered, hwnd)
+    end
+end
+HyprWin.windows = filtered
 HyprWin.retile()
