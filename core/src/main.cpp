@@ -218,7 +218,12 @@ int main() {
     });
 
     wm.set_function("is_window_visible", [](size_t hwnd) {
-      return (bool)IsWindowVisible((HWND)hwnd);
+      if (!IsWindowVisible((HWND)hwnd)) return false;
+      int cloaked = 0;
+      if (SUCCEEDED(DwmGetWindowAttribute((HWND)hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0) {
+        return false;
+      }
+      return true;
     });
 
     wm.set_function("is_minimized",
@@ -230,6 +235,10 @@ int main() {
           [](HWND hwnd, LPARAM lParam) -> BOOL {
             auto list = (std::vector<size_t> *)lParam;
             if (IsWindowVisible(hwnd) && IsToplevelWindow(hwnd)) {
+              int cloaked = 0;
+              if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0) {
+                return TRUE;
+              }
               list->push_back((size_t)hwnd);
             }
             return TRUE;
