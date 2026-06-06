@@ -22,6 +22,7 @@ extern "C" {
 // Now types are known to the compiler
 sol::state *g_lua = nullptr;
 Renderer g_renderer;
+HWND g_overlay_hwnd = NULL;
 
 bool IsToplevelWindow(HWND hwnd) {
   DWORD pid;
@@ -389,12 +390,37 @@ int main() {
 
         TranslateMessage(&msg);
         DispatchMessage(&msg);
+      } else {
+        // Yield CPU to prevent high core usage (caps frame rate around 60fps)
+        Sleep(16);
       }
 
-      // Trigger Lua rendering
-      sol::protected_function render_func = lua["ui"]["render"];
-      if (render_func.valid()) {
-        render_func();
+      // Check if the foreground window is in fullscreen (e.g., games)
+      HWND fg = GetForegroundWindow();
+      if (fg && fg != g_overlay_hwnd) {
+        RECT rc;
+        GetWindowRect(fg, &rc);
+        int screen_w = GetSystemMetrics(SM_CXSCREEN);
+        int screen_h = GetSystemMetrics(SM_CYSCREEN);
+        bool is_fullscreen = (rc.left <= 0 && rc.top <= 0 && rc.right >= screen_w && rc.bottom >= screen_h);
+
+        if (is_fullscreen) {
+          if (IsWindowVisible(g_overlay_hwnd)) {
+            ShowWindow(g_overlay_hwnd, SW_HIDE);
+          }
+        } else {
+          if (!IsWindowVisible(g_overlay_hwnd)) {
+            ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
+          }
+        }
+      }
+
+      // Trigger Lua rendering only if overlay is visible to save GPU resources
+      if (IsWindowVisible(g_overlay_hwnd)) {
+        sol::protected_function render_func = lua["ui"]["render"];
+        if (render_func.valid()) {
+          render_func();
+        }
       }
     }
 

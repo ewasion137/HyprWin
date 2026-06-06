@@ -15,7 +15,8 @@ local window_rules = {
     float = { "Telegram", "Picture-in-picture", "Calculator", "Картинка в картинке" },
     ignore_classes = { 
         "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow", 
-        "DesktopWindowXamlSource", "MSCTFIME UI", "IME", "CicMarshalWnd" 
+        "DesktopWindowXamlSource", "MSCTFIME UI", "IME", "CicMarshalWnd",
+        "TaskManagerWindow"
     }
 }
 
