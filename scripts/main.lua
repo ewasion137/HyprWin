@@ -40,8 +40,8 @@ HyprWin.retile = function()
     -- Deep clean the list before every math operation
     local valid_windows = {}
     for _, hwnd in ipairs(HyprWin.windows) do
-        -- Only keep windows that are actually visible and NOT minimized
-        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) then
+        -- Keep windows that are visible, not minimized, and not topmost (dynamic filter)
+        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) and not wm.is_topmost(hwnd) then
             table.insert(valid_windows, hwnd)
         end
     end
@@ -50,7 +50,7 @@ HyprWin.retile = function()
     -- Ensure every window is assigned to a workspace
     for _, hwnd in ipairs(HyprWin.windows) do
         if not HyprWin.window_workspaces[hwnd] then
-            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+            table.insert(valid_windows, hwnd)
         end
     end
 
@@ -61,6 +61,12 @@ HyprWin.retile = function()
         if ws == HyprWin.current_workspace then
             if not HyprWin.floating_windows[hwnd] then
                 table.insert(active_workspace_windows, hwnd)
+            else
+                -- Restore floating window if it was stashed off-screen
+                local x, y, _, _ = wm.get_window_rect(hwnd)
+                if x < -10000 or y < -10000 then
+                    wm.move_window(hwnd, 150, 150, 1280, 720)
+                end
             end
         else
             -- Move off-screen to hide from view without minimizing
