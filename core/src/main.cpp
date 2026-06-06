@@ -136,6 +136,7 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
 int main() {
   // Wrap everything in a try-catch to catch sol2 exceptions
   try {
+    SetConsoleCtrlHandler(ConsoleHandler, TRUE);
     std::cout << "HyprWin: Initializing Lua engine..." << std::endl;
     sol::state lua;
     g_lua = &lua;
@@ -391,6 +392,8 @@ int main() {
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
     UnhookWinEvent(hook_minimize);
+
+    RestoreAllWindows();
 
     if (result.valid()) {
       std::cout << "HyprWin: Lua test passed." << std::endl;
