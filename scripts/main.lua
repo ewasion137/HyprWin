@@ -13,7 +13,10 @@ end
 
 local window_rules = {
     float = { "Telegram", "Picture-in-picture", "Calculator", "Картинка в картинке" },
-    ignore_classes = { "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow" }
+    ignore_classes = { 
+        "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow", 
+        "DesktopWindowXamlSource", "MSCTFIME UI", "IME", "CicMarshalWnd" 
+    }
 }
 
 local function is_tracked(hwnd)
@@ -47,10 +50,10 @@ HyprWin.retile = function()
     end
     HyprWin.windows = valid_windows
 
-    -- Ensure every window is assigned to a workspace
+    -- Ensure every window is assigned to a workspace safely
     for _, hwnd in ipairs(HyprWin.windows) do
         if not HyprWin.window_workspaces[hwnd] then
-            table.insert(valid_windows, hwnd)
+            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
         end
     end
 
