@@ -163,6 +163,11 @@ int main() {
       return std::string(title);
     });
 
+    wm.set_function("is_topmost", [](size_t hwnd) {
+      LONG ex_style = GetWindowLong((HWND)hwnd, GWL_EXSTYLE);
+      return (bool)(ex_style & WS_EX_TOPMOST);
+    });
+
     wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
                                       double h) {
       HWND handle = (HWND)hwnd;
