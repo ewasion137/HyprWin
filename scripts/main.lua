@@ -376,6 +376,35 @@ HyprWin.on_hotkey = function(id)
             end
             HyprWin.retile()
         end
+    elseif id == 303 then
+        -- Force Tile (Alt + T)
+        local active_hwnd = wm.get_foreground_window()
+        if active_hwnd and active_hwnd ~= 0 then
+            wm.force_enable_resize(active_hwnd)
+            if not is_tracked(active_hwnd) then
+                table.insert(HyprWin.windows, active_hwnd)
+            end
+            HyprWin.floating_windows[active_hwnd] = nil
+            HyprWin.window_workspaces[active_hwnd] = HyprWin.current_workspace
+            log("Force tiled window: " .. active_hwnd)
+            HyprWin.retile()
+        end
+    elseif id == 401 then
+        focus_direction("left")
+    elseif id == 402 then
+        focus_direction("up")
+    elseif id == 403 then
+        focus_direction("right")
+    elseif id == 404 then
+        focus_direction("down")
+    elseif id == 501 then
+        swap_direction("left")
+    elseif id == 502 then
+        swap_direction("up")
+    elseif id == 503 then
+        swap_direction("right")
+    elseif id == 504 then
+        swap_direction("down")
     end
 end
 
