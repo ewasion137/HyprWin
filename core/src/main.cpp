@@ -169,6 +169,23 @@ int main() {
       return (bool)(ex_style & WS_EX_TOPMOST);
     });
 
+    wm.set_function("get_foreground_window", []() {
+      return (size_t)GetForegroundWindow();
+    });
+
+    wm.set_function("focus_window", [](size_t hwnd) {
+      SetForegroundWindow((HWND)hwnd);
+    });
+
+    wm.set_function("force_enable_resize", [](size_t hwnd) {
+      HWND handle = (HWND)hwnd;
+      long style = GetWindowLong(handle, GWL_STYLE);
+      style |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
+      SetWindowLong(handle, GWL_STYLE, style);
+      SetWindowPos(handle, NULL, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    });
+
     wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
                                       double h) {
       HWND handle = (HWND)hwnd;
@@ -367,6 +384,20 @@ int main() {
     // Register Alt + F to toggle Floating state, and Alt + P to Pin (Sticky)
     RegisterHotKey(NULL, 301, MOD_ALT, 'F');
     RegisterHotKey(NULL, 302, MOD_ALT, 'P');
+    RegisterHotKey(NULL, 303, MOD_ALT, 'T'); // Force Tile hotkey
+
+    // Focus Movement (Alt + Left/Up/Right/Down)
+    RegisterHotKey(NULL, 401, MOD_ALT, VK_LEFT);
+    RegisterHotKey(NULL, 402, MOD_ALT, VK_UP);
+    RegisterHotKey(NULL, 403, MOD_ALT, VK_RIGHT);
+    RegisterHotKey(NULL, 404, MOD_ALT, VK_DOWN);
+
+    // Window Swap (Alt + Shift + Left/Up/Right/Down)
+    RegisterHotKey(NULL, 501, MOD_ALT | MOD_SHIFT, VK_LEFT);
+    RegisterHotKey(NULL, 502, MOD_ALT | MOD_SHIFT, VK_UP);
+    RegisterHotKey(NULL, 503, MOD_ALT | MOD_SHIFT, VK_RIGHT);
+    RegisterHotKey(NULL, 504, MOD_ALT | MOD_SHIFT, VK_DOWN);
+
 
     // Message loop is REQUIRED for hooks to work
     MSG msg;
