@@ -154,7 +154,6 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
 end
 
 -- Border rendering with safety checks
--- Border rendering with safety checks
 HyprWin.on_render = function()
     -- Only draw borders for windows we actually track on the current workspace
     for _, hwnd in ipairs(HyprWin.windows) do

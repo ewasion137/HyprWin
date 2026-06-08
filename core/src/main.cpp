@@ -291,6 +291,8 @@ int main() {
         "Overlay", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
         GetSystemMetrics(SM_CYSCREEN), NULL, NULL, wc.hInstance, NULL);
 
+    g_overlay_hwnd = overlay_hwnd; // Store globally
+
     // Set the window to be fully opaque layered window first
     SetLayeredWindowAttributes(overlay_hwnd, 0, 255, LWA_ALPHA);
 
@@ -310,10 +312,9 @@ int main() {
                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     // --- FIXED CODE END ---
 
-    g_renderer.init(overlay_hwnd);
-
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
+
     std::string path(buffer);
     std::string exe_dir = path.substr(0, path.find_last_of("\\/"));
 
@@ -363,8 +364,9 @@ int main() {
       RegisterHotKey(NULL, 101 + (i - 1), MOD_ALT, '0' + i);
       RegisterHotKey(NULL, 201 + (i - 1), MOD_ALT | MOD_SHIFT, '0' + i);
     }
-    // Register Alt + F to toggle Floating state
+    // Register Alt + F to toggle Floating state, and Alt + P to Pin (Sticky)
     RegisterHotKey(NULL, 301, MOD_ALT, 'F');
+    RegisterHotKey(NULL, 302, MOD_ALT, 'P');
 
     // Message loop is REQUIRED for hooks to work
     MSG msg;
@@ -397,7 +399,7 @@ int main() {
 
       // Check if the foreground window is in fullscreen (e.g., games)
       HWND fg = GetForegroundWindow();
-      if (fg && fg != g_overlay_hwnd) {
+      if (fg && fg != g_overlay_hwnd && !IsZoomed(fg)) {
         RECT rc;
         GetWindowRect(fg, &rc);
         int screen_w = GetSystemMetrics(SM_CXSCREEN);
@@ -412,6 +414,11 @@ int main() {
           if (!IsWindowVisible(g_overlay_hwnd)) {
             ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
           }
+        }
+      } else if (fg && IsZoomed(fg)) {
+        // Maximized windows are not fullscreen, ensure overlay is visible
+        if (!IsWindowVisible(g_overlay_hwnd)) {
+          ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
         }
       }
 
