@@ -4,6 +4,8 @@ HyprWin.focused_window = nil
 HyprWin.current_workspace = 1
 HyprWin.window_workspaces = {} -- Tracks workspace ID for each hwnd
 HyprWin.floating_windows = {}  -- Tracks floating state for each hwnd (boolean)
+HyprWin.floating_rects = {}    -- Stores custom geometry {x, y, w, h} for floating windows
+HyprWin.sticky_windows = {}    -- Tracks pinned/sticky state (visible on all workspaces)
 local is_retiling = false
 
 -- Helper to check if window still exists and is visible
@@ -58,21 +60,37 @@ HyprWin.retile = function()
         end
     end
 
-    -- Filter active workspace and non-floating windows
+    -- Filter active workspace, floating, and sticky windows
     local active_workspace_windows = {}
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-        if ws == HyprWin.current_workspace then
+        local is_sticky = HyprWin.sticky_windows[hwnd]
+        local is_active_ws = (ws == HyprWin.current_workspace)
+
+        if is_active_ws or is_sticky then
             if not HyprWin.floating_windows[hwnd] then
                 table.insert(active_workspace_windows, hwnd)
             else
-                -- Restore floating window if it was stashed off-screen
+                -- Restore floating or sticky window safely
                 local x, y, _, _ = wm.get_window_rect(hwnd)
                 if x < -10000 or y < -10000 then
-                    wm.move_window(hwnd, 150, 150, 1280, 720)
+                    local saved_rect = HyprWin.floating_rects[hwnd]
+                    if saved_rect then
+                        wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
+                    else
+                        -- Fallback center position
+                        wm.move_window(hwnd, 150, 150, 1280, 720)
+                    end
                 end
             end
         else
+            -- Save floating window layout before stashing it off-screen
+            if HyprWin.floating_windows[hwnd] then
+                local x, y, w, h = wm.get_window_rect(hwnd)
+                if x >= -10000 and y >= -10000 then
+                    HyprWin.floating_rects[hwnd] = { x, y, w, h }
+                end
+            end
             -- Move off-screen to hide from view without minimizing
             wm.move_window(hwnd, -32000, -32000, 800, 600)
         end
@@ -234,10 +252,25 @@ HyprWin.on_hotkey = function(id)
         if focused then
             if HyprWin.floating_windows[focused] then
                 HyprWin.floating_windows[focused] = nil
+                HyprWin.sticky_windows[focused] = nil -- Unfloated windows cannot be sticky
                 log("Window " .. focused .. " is now Tiled")
             else
                 HyprWin.floating_windows[focused] = true
                 log("Window " .. focused .. " is now Floating")
+            end
+            HyprWin.retile()
+        end
+    elseif id == 302 then
+        -- Toggle Sticky State (Alt + P)
+        local focused = HyprWin.focused_window
+        if focused then
+            if HyprWin.sticky_windows[focused] then
+                HyprWin.sticky_windows[focused] = nil
+                log("Window " .. focused .. " is no longer Sticky")
+            else
+                HyprWin.sticky_windows[focused] = true
+                HyprWin.floating_windows[focused] = true -- Pinning requires floating state
+                log("Window " .. focused .. " is now Sticky (Pinned to all workspaces)")
             end
             HyprWin.retile()
         end

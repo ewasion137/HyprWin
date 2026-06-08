@@ -432,9 +432,11 @@ int main() {
     }
 
     // Unregister hotkeys on exit
-    for (int i = 101; i <= 109; ++i) UnregisterHotKey(NULL, i);
+   for (int i = 101; i <= 109; ++i) UnregisterHotKey(NULL, i);
     for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
     UnregisterHotKey(NULL, 301);
+    UnregisterHotKey(NULL, 302);
+
 
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
