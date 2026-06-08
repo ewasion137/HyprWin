@@ -228,6 +228,108 @@ for _, hwnd in ipairs(existing) do
     end
 end
 
+local function focus_direction(dir)
+    local focused = HyprWin.focused_window
+    if not focused then return end
+    
+    local fx, fy, fw, fh = wm.get_window_rect(focused)
+    local fcx = fx + fw / 2
+    local fcy = fy + fh / 2
+    
+    local best_hwnd = nil
+    local best_dist = math.huge
+    
+    for _, hwnd in ipairs(HyprWin.windows) do
+        if hwnd ~= focused and not HyprWin.floating_windows[hwnd] then
+            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+            if ws == HyprWin.current_workspace then
+                local x, y, w, h = wm.get_window_rect(hwnd)
+                local cx = x + w / 2
+                local cy = y + h / 2
+                
+                local is_in_dir = false
+                if dir == "left" and cx < fcx then
+                    is_in_dir = true
+                elseif dir == "right" and cx > fcx then
+                    is_in_dir = true
+                elseif dir == "up" and cy < fcy then
+                    is_in_dir = true
+                elseif dir == "down" and cy > fcy then
+                    is_in_dir = true
+                end
+                
+                if is_in_dir then
+                    -- Calculate Manhattan distance between windows
+                    local dist = math.abs(cx - fcx) + math.abs(cy - fcy)
+                    if dist < best_dist then
+                        best_dist = dist
+                        best_hwnd = hwnd
+                    end
+                end
+            end
+        end
+    end
+    
+    if best_hwnd then
+        wm.focus_window(best_hwnd)
+    end
+end
+
+local function swap_direction(dir)
+    local focused = HyprWin.focused_window
+    if not focused then return end
+    
+    local fx, fy, fw, fh = wm.get_window_rect(focused)
+    local fcx = fx + fw / 2
+    local fcy = fy + fh / 2
+    
+    local target_hwnd = nil
+    local best_dist = math.huge
+    
+    for _, hwnd in ipairs(HyprWin.windows) do
+        if hwnd ~= focused and not HyprWin.floating_windows[hwnd] then
+            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+            if ws == HyprWin.current_workspace then
+                local x, y, w, h = wm.get_window_rect(hwnd)
+                local cx = x + w / 2
+                local cy = y + h / 2
+                
+                local is_in_dir = false
+                if dir == "left" and cx < fcx then
+                    is_in_dir = true
+                elseif dir == "right" and cx > fcx then
+                    is_in_dir = true
+                elseif dir == "up" and cy < fcy then
+                    is_in_dir = true
+                elseif dir == "down" and cy > fcy then
+                    is_in_dir = true
+                end
+                
+                if is_in_dir then
+                    local dist = math.abs(cx - fcx) + math.abs(cy - fcy)
+                    if dist < best_dist then
+                        best_dist = dist
+                        target_hwnd = hwnd
+                    end
+                end
+            end
+        end
+    end
+    
+    if target_hwnd then
+        local idx1, idx2 = nil, nil
+        for i, hwnd in ipairs(HyprWin.windows) do
+            if hwnd == focused then idx1 = i end
+            if hwnd == target_hwnd then idx2 = i end
+        end
+        
+        if idx1 and idx2 then
+            HyprWin.windows[idx1], HyprWin.windows[idx2] = HyprWin.windows[idx2], HyprWin.windows[idx1]
+            HyprWin.retile()
+        end
+    end
+end
+
 HyprWin.on_hotkey = function(id)
     if id >= 101 and id <= 109 then
         -- Switch Workspace (Alt + 1..9)

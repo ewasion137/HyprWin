@@ -467,6 +467,9 @@ int main() {
     for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
     UnregisterHotKey(NULL, 301);
     UnregisterHotKey(NULL, 302);
+    UnregisterHotKey(NULL, 303);
+    for (int i = 401; i <= 404; ++i) UnregisterHotKey(NULL, i);
+    for (int i = 501; i <= 504; ++i) UnregisterHotKey(NULL, i);
 
 
     UnhookWinEvent(hook_objects);
