@@ -62,14 +62,26 @@ HyprWin.retile = function()
         end
     end
 
+    -- Initialize workspace ratio if not set (default 0.5)
+    if not HyprWin.workspace_ratios[HyprWin.current_workspace] then
+        HyprWin.workspace_ratios[HyprWin.current_workspace] = 0.5
+    end
+
     -- Filter active workspace, floating, and sticky windows
     local active_workspace_windows = {}
+    local fullscreen_hwnd = nil
+
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
         local is_sticky = HyprWin.sticky_windows[hwnd]
         local is_active_ws = (ws == HyprWin.current_workspace)
 
         if is_active_ws or is_sticky then
+            -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
+            if HyprWin.fullscreen_windows[hwnd] then
+                fullscreen_hwnd = hwnd
+            end
+
             if not HyprWin.floating_windows[hwnd] then
                 table.insert(active_workspace_windows, hwnd)
             else
@@ -98,9 +110,6 @@ HyprWin.retile = function()
         end
     end
 
-    local n = #active_workspace_windows
-    if n == 0 then return end
-
     local sw, sh = wm.get_screen_size()
     local gap = 15
     local bar_h = 35
@@ -108,6 +117,23 @@ HyprWin.retile = function()
     -- Correct work area
     local tx, ty = gap, bar_h + gap
     local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
+
+    -- Handle Monocle Fullscreen (respecting topbar)
+    if fullscreen_hwnd then
+        for _, hwnd in ipairs(active_workspace_windows) do
+            if hwnd == fullscreen_hwnd then
+                wm.move_window(hwnd, tx, ty, tw, th)
+            else
+                wm.move_window(hwnd, -32000, -32000, 800, 600)
+            end
+        end
+        return
+    end
+
+    local n = #active_workspace_windows
+    if n == 0 then return end
+
+    local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
 
     -- Recursive BSP splitting (Hyprland dwindle concept)
     local function recursive_tile(x, y, w, h, first, last)
@@ -120,13 +146,13 @@ HyprWin.retile = function()
 
         -- Choose split axis based on aspect ratio
         if w > h then
-            -- Split vertically (left and right)
-            local w1 = math.floor((w - gap) / 2)
+            -- Split vertically (left and right) using workspace split ratio
+            local w1 = math.floor((w - gap) * current_ratio)
             recursive_tile(x, y, w1, h, first, mid)
             recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last)
         else
-            -- Split horizontally (top and bottom)
-            local h1 = math.floor((h - gap) / 2)
+            -- Split horizontally (top and bottom) using workspace split ratio
+            local h1 = math.floor((h - gap) * current_ratio)
             recursive_tile(x, y, w, h1, first, mid)
             recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last)
         end
