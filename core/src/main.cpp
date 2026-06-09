@@ -401,6 +401,8 @@ int main() {
 
     // Smart Resize Ratio (Ctrl + Alt + H/L)
     RegisterHotKey(NULL, 601, MOD_CONTROL | MOD_ALT, 'H');
+    RegisterHotKey(NULL, 603, MOD_CONTROL | MOD_ALT, 'J');
+    RegisterHotKey(NULL, 604, MOD_CONTROL | MOD_ALT, 'K');
     RegisterHotKey(NULL, 602, MOD_CONTROL | MOD_ALT, 'L');
 
 
