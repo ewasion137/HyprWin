@@ -385,18 +385,23 @@ int main() {
     RegisterHotKey(NULL, 301, MOD_ALT, 'F');
     RegisterHotKey(NULL, 302, MOD_ALT, 'P');
     RegisterHotKey(NULL, 303, MOD_ALT, 'T'); // Force Tile hotkey
+    RegisterHotKey(NULL, 304, MOD_ALT, 'M'); // Fullscreen with topbar (Monocle)
 
-    // Focus Movement (Alt + Left/Up/Right/Down)
-    RegisterHotKey(NULL, 401, MOD_ALT, VK_LEFT);
-    RegisterHotKey(NULL, 402, MOD_ALT, VK_UP);
-    RegisterHotKey(NULL, 403, MOD_ALT, VK_RIGHT);
-    RegisterHotKey(NULL, 404, MOD_ALT, VK_DOWN);
+    // Focus Movement (Alt + H/J/K/L to avoid conflicts with IDEs)
+    RegisterHotKey(NULL, 401, MOD_ALT, 'H');
+    RegisterHotKey(NULL, 402, MOD_ALT, 'J');
+    RegisterHotKey(NULL, 403, MOD_ALT, 'K');
+    RegisterHotKey(NULL, 404, MOD_ALT, 'L');
 
-    // Window Swap (Alt + Shift + Left/Up/Right/Down)
-    RegisterHotKey(NULL, 501, MOD_ALT | MOD_SHIFT, VK_LEFT);
-    RegisterHotKey(NULL, 502, MOD_ALT | MOD_SHIFT, VK_UP);
-    RegisterHotKey(NULL, 503, MOD_ALT | MOD_SHIFT, VK_RIGHT);
-    RegisterHotKey(NULL, 504, MOD_ALT | MOD_SHIFT, VK_DOWN);
+    // Window Swap (Alt + Shift + H/J/K/L)
+    RegisterHotKey(NULL, 501, MOD_ALT | MOD_SHIFT, 'H');
+    RegisterHotKey(NULL, 502, MOD_ALT | MOD_SHIFT, 'J');
+    RegisterHotKey(NULL, 503, MOD_ALT | MOD_SHIFT, 'K');
+    RegisterHotKey(NULL, 504, MOD_ALT | MOD_SHIFT, 'L');
+
+    // Smart Resize Ratio (Ctrl + Alt + H/L)
+    RegisterHotKey(NULL, 601, MOD_CONTROL | MOD_ALT, 'H');
+    RegisterHotKey(NULL, 602, MOD_CONTROL | MOD_ALT, 'L');
 
 
     // Message loop is REQUIRED for hooks to work
