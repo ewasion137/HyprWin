@@ -417,22 +417,49 @@ HyprWin.on_hotkey = function(id)
             log("Force tiled window: " .. active_hwnd)
             HyprWin.retile()
         end
+    elseif id == 304 then
+        -- Fullscreen Toggle with Topbar (Alt + M)
+        local focused = HyprWin.focused_window
+        if focused then
+            if HyprWin.fullscreen_windows[focused] then
+                HyprWin.fullscreen_windows[focused] = nil
+                log("Fullscreen disabled for window " .. focused)
+            else
+                HyprWin.fullscreen_windows[focused] = true
+                log("Fullscreen enabled for window " .. focused)
+            end
+            HyprWin.retile()
+        end
     elseif id == 401 then
-        focus_direction("left")
+        focus_direction("left") -- H
     elseif id == 402 then
-        focus_direction("up")
+        focus_direction("down") -- J
     elseif id == 403 then
-        focus_direction("right")
+        focus_direction("up")   -- K
     elseif id == 404 then
-        focus_direction("down")
+        focus_direction("right") -- L
     elseif id == 501 then
         swap_direction("left")
     elseif id == 502 then
-        swap_direction("up")
-    elseif id == 503 then
-        swap_direction("right")
-    elseif id == 504 then
         swap_direction("down")
+    elseif id == 503 then
+        swap_direction("up")
+    elseif id == 504 then
+        swap_direction("right")
+    elseif id == 601 then
+        -- Smart Resize Shrink (Ctrl + Alt + H)
+        local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
+        if ratio > 0.15 then
+            HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio - 0.05
+            HyprWin.retile()
+        end
+    elseif id == 602 then
+        -- Smart Resize Grow (Ctrl + Alt + L)
+        local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
+        if ratio < 0.85 then
+            HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio + 0.05
+            HyprWin.retile()
+        end
     end
 end
 
