@@ -6,6 +6,8 @@ HyprWin.window_workspaces = {} -- Tracks workspace ID for each hwnd
 HyprWin.floating_windows = {}  -- Tracks floating state for each hwnd (boolean)
 HyprWin.floating_rects = {}    -- Stores custom geometry {x, y, w, h} for floating windows
 HyprWin.sticky_windows = {}    -- Tracks pinned/sticky state (visible on all workspaces)
+HyprWin.fullscreen_windows = {} -- Tracks monocle-fullscreen state for each hwnd (boolean)
+HyprWin.workspace_ratios = {}  -- Stores split ratio (0.1 - 0.9) for each workspace
 local is_retiling = false
 
 -- Helper to check if window still exists and is visible
