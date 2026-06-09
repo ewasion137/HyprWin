@@ -480,6 +480,8 @@ int main() {
     for (int i = 501; i <= 504; ++i) UnregisterHotKey(NULL, i);
     UnregisterHotKey(NULL, 601);
     UnregisterHotKey(NULL, 602);
+    UnregisterHotKey(NULL, 603);
+    UnregisterHotKey(NULL, 604);
 
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);

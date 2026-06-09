@@ -135,8 +135,9 @@ HyprWin.retile = function()
 
     local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
 
-    -- Recursive BSP splitting (Hyprland dwindle concept)
-    local function recursive_tile(x, y, w, h, first, last)
+    -- Recursive BSP splitting with depth tracking
+    local function recursive_tile(x, y, w, h, first, last, depth)
+        depth = depth or 0
         if first == last then
             wm.move_window(active_workspace_windows[first], x, y, w, h)
             return
@@ -144,21 +145,24 @@ HyprWin.retile = function()
 
         local mid = math.floor((first + last) / 2)
 
+        -- Apply adjustable ratio only to the main split (depth 0), others are balanced
+        local ratio = (depth == 0) and current_ratio or 0.5
+
         -- Choose split axis based on aspect ratio
         if w > h then
-            -- Split vertically (left and right) using workspace split ratio
-            local w1 = math.floor((w - gap) * current_ratio)
-            recursive_tile(x, y, w1, h, first, mid)
-            recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last)
+            -- Split vertically (left and right)
+            local w1 = math.floor((w - gap) * ratio)
+            recursive_tile(x, y, w1, h, first, mid, depth + 1)
+            recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last, depth + 1)
         else
-            -- Split horizontally (top and bottom) using workspace split ratio
-            local h1 = math.floor((h - gap) * current_ratio)
-            recursive_tile(x, y, w, h1, first, mid)
-            recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last)
+            -- Split horizontally (top and bottom)
+            local h1 = math.floor((h - gap) * ratio)
+            recursive_tile(x, y, w, h1, first, mid, depth + 1)
+            recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last, depth + 1)
         end
     end
 
-    recursive_tile(tx, ty, tw, th, 1, n)
+    recursive_tile(tx, ty, tw, th, 1, n, 0)
 end
 
 -- --- FIXED CODE LOCATOR: event dispatcher ---
@@ -446,15 +450,15 @@ HyprWin.on_hotkey = function(id)
         swap_direction("up")
     elseif id == 504 then
         swap_direction("right")
-    elseif id == 601 then
-        -- Smart Resize Shrink (Ctrl + Alt + H)
+    elseif id == 601 or id == 603 then
+        -- Smart Resize Shrink (Ctrl + Alt + H/J)
         local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
         if ratio > 0.15 then
             HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio - 0.05
             HyprWin.retile()
         end
-    elseif id == 602 then
-        -- Smart Resize Grow (Ctrl + Alt + L)
+    elseif id == 602 or id == 604 then
+        -- Smart Resize Grow (Ctrl + Alt + L/K)
         local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
         if ratio < 0.85 then
             HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio + 0.05
@@ -462,6 +466,7 @@ HyprWin.on_hotkey = function(id)
         end
     end
 end
+
 
 HyprWin.windows = filtered
 HyprWin.retile()
