@@ -50,11 +50,11 @@ end
 
 -- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
-    -- Deep clean the list before every math operation
+    -- Deep clean the list before every math operation (Keep minimized windows!)
     local valid_windows = {}
     for _, hwnd in ipairs(HyprWin.windows) do
-        -- Keep windows that are visible, not minimized, and not topmost (dynamic filter)
-        if wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd) and not wm.is_topmost(hwnd) then
+        -- Do NOT check for minimizing here so they stay in our tracking list
+        if wm.is_window_visible(hwnd) and not wm.is_topmost(hwnd) then
             table.insert(valid_windows, hwnd)
         end
     end
@@ -82,23 +82,26 @@ HyprWin.retile = function()
         local is_active_ws = (ws == HyprWin.current_workspace)
 
         if is_active_ws or is_sticky then
-            -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
-            if HyprWin.fullscreen_windows[hwnd] then
-                fullscreen_hwnd = hwnd
-            end
+            -- Only tile if the window is NOT minimized
+            if not wm.is_minimized(hwnd) then
+                -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
+                if HyprWin.fullscreen_windows[hwnd] then
+                    fullscreen_hwnd = hwnd
+                end
 
-            if not HyprWin.floating_windows[hwnd] then
-                table.insert(active_workspace_windows, hwnd)
-            else
-                -- Restore floating or sticky window safely
-                local x, y, _, _ = wm.get_window_rect(hwnd)
-                if x < -10000 or y < -10000 then
-                    local saved_rect = HyprWin.floating_rects[hwnd]
-                    if saved_rect then
-                        wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
-                    else
-                        -- Fallback center position
-                        wm.move_window(hwnd, 150, 150, 1280, 720)
+                if not HyprWin.floating_windows[hwnd] then
+                    table.insert(active_workspace_windows, hwnd)
+                else
+                    -- Restore floating or sticky window safely
+                    local x, y, _, _ = wm.get_window_rect(hwnd)
+                    if x < -10000 or y < -10000 then
+                        local saved_rect = HyprWin.floating_rects[hwnd]
+                        if saved_rect then
+                            wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
+                        else
+                            -- Fallback center position
+                            wm.move_window(hwnd, 150, 150, 1280, 720)
+                        end
                     end
                 end
             end
