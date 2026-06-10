@@ -186,7 +186,14 @@ int main() {
         ShowWindow(handle, SW_SHOW);
       }
 
-      // Bypass Windows focus stealing prevention using thread attachment
+      // 1. Temporarily disable the global foreground lock timeout
+      SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, (LPVOID)0, SPIF_SENDCHANGE);
+
+      // 2. Simulate a rapid ALT key tap to bypass Windows focus stealing protection
+      keybd_event(VK_MENU, 0, 0, 0);
+      keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+
+      // 3. Thread attachment fallback to ensure keyboard input follows the window
       HWND fg = GetForegroundWindow();
       DWORD fgThread = GetWindowThreadProcessId(fg, NULL);
       DWORD currentThread = GetCurrentThreadId();
@@ -194,11 +201,13 @@ int main() {
       if (fgThread != currentThread && fgThread != 0) {
         AttachThreadInput(currentThread, fgThread, TRUE);
         SetForegroundWindow(handle);
+        BringWindowToTop(handle);
         SetActiveWindow(handle);
         SetFocus(handle);
         AttachThreadInput(currentThread, fgThread, FALSE);
       } else {
         SetForegroundWindow(handle);
+        BringWindowToTop(handle);
         SetActiveWindow(handle);
         SetFocus(handle);
       }
