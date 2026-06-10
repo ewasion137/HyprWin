@@ -175,7 +175,31 @@ int main() {
     });
 
     wm.set_function("focus_window", [](size_t hwnd) {
-      SetForegroundWindow((HWND)hwnd);
+      HWND handle = (HWND)hwnd;
+      
+      // Auto-restore window if it was minimized
+      if (IsIconic(handle)) {
+        ShowWindow(handle, SW_RESTORE);
+      } else {
+        ShowWindow(handle, SW_SHOW);
+      }
+
+      // Bypass Windows focus stealing prevention using thread attachment
+      HWND fg = GetForegroundWindow();
+      DWORD fgThread = GetWindowThreadProcessId(fg, NULL);
+      DWORD currentThread = GetCurrentThreadId();
+
+      if (fgThread != currentThread && fgThread != 0) {
+        AttachThreadInput(currentThread, fgThread, TRUE);
+        SetForegroundWindow(handle);
+        SetActiveWindow(handle);
+        SetFocus(handle);
+        AttachThreadInput(currentThread, fgThread, FALSE);
+      } else {
+        SetForegroundWindow(handle);
+        SetActiveWindow(handle);
+        SetFocus(handle);
+      }
     });
 
     wm.set_function("force_enable_resize", [](size_t hwnd) {
