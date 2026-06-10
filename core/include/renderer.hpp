@@ -1,11 +1,11 @@
+// --- FIXED CODE LOCATOR: scripts/core/include/renderer.hpp ---
 #pragma once
+
 #include <d2d1.h>
-#include <dwrite.h>
+#include <dwrite.h> // Include DirectWrite library for hardware-accelerated text rendering
 #include <windows.h>
 #include <string>
 
-
-// High-performance Direct2D renderer for UI and borders
 class Renderer {
 public:
     Renderer();
@@ -17,7 +17,7 @@ public:
     void fill_rect(float x, float y, float w, float h, float r, float g, float b, float a);
     void clear(float r, float g, float b, float a);
     
-    // New hardware-accelerated text rendering function
+    // Hardware-accelerated text rendering using DirectWrite text layout
     void draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName);
 
 private:

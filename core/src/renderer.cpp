@@ -1,15 +1,10 @@
-// --- FIXED CODE LOCATOR: renderer.cpp ---
+// --- FIXED CODE LOCATOR: scripts/core/src/renderer.cpp ---
 #include "../include/renderer.hpp"
-
-// Undefine conflicting Win32 macro to prevent Direct2D DrawText collision
-#ifdef DrawText
-#undef DrawText
-#endif
 
 // Initialize Direct2D factory and resources
 Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr), writeFactory(nullptr) {}
 
-Renderer::~ifndef_cleanup_macro {
+Renderer::~Renderer() {
   if (brush)
     brush->Release();
   if (target)
@@ -69,7 +64,7 @@ void Renderer::fill_rect(float x, float y, float w, float h, float r, float g,
   brush->Release();
 }
 
-// Render dynamic text on the transparent overlay using DirectWrite
+// Render dynamic text on the transparent overlay using DirectWrite text layout
 void Renderer::draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName) {
   if (!target || !writeFactory) return;
 
@@ -83,11 +78,24 @@ void Renderer::draw_text(const std::string& text, float x, float y, float size, 
       DWRITE_FONT_STRETCH_NORMAL, size, L"", &textFormat);
 
   if (SUCCEEDED(hr)) {
-    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
-    // Call the original Direct2D DrawText method safely
-    target->DrawText(wtext.c_str(), (UINT32)wtext.length(), textFormat,
-                     D2D1::RectF(x, y, x + 2000.0f, y + 500.0f), brush);
-    brush->Release();
+    IDWriteTextLayout* textLayout = nullptr;
+    
+    // Create text layout to calculate formatting and size on the fly
+    hr = writeFactory->CreateTextLayout(
+        wtext.c_str(), (UINT32)wtext.length(), textFormat,
+        2000.0f, 500.0f, &textLayout);
+
+    if (SUCCEEDED(hr)) {
+      target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+      
+      D2D1_POINT_2F origin = D2D1::Point2F(x, y);
+      
+      // DrawTextLayout does NOT collide with any winuser.h macros
+      target->DrawTextLayout(origin, textLayout, brush);
+
+      brush->Release();
+      textLayout->Release();
+    }
     textFormat->Release();
   }
 }
