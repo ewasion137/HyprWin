@@ -193,12 +193,12 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     if event_type == 0x8002 or event_type == 0x0017 then
         if not is_tracked(hwnd) then
             table.insert(HyprWin.windows, hwnd)
-            HyprWin.retile()
         end
+        HyprWin.retile()
     end
 
-    -- 0x8001: Destroy, 0x8003: Hide, 0x0016: Minimize
-    if event_type == 0x8001 or event_type == 0x8003 or event_type == 0x0016 then
+    -- 0x8001: Destroy, 0x8003: Hide
+    if event_type == 0x8001 or event_type == 0x8003 then
         local idx = is_tracked(hwnd)
         if idx then
             table.remove(HyprWin.windows, idx)
@@ -208,6 +208,11 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
             end
             HyprWin.retile()
         end
+    end
+
+    -- 0x0016: Minimize (Just trigger layout update, do NOT remove from tracking)
+    if event_type == 0x0016 then
+        HyprWin.retile()
     end
 end
 

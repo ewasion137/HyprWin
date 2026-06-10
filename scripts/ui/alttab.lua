@@ -121,6 +121,17 @@ function alttab.draw()
 
         -- Draw relative miniature wireframe window layout on target screen
         local wx, wy, ww, wh = wm.get_window_rect(hwnd)
+        
+        -- If window is minimized, use its last known floating coordinates, or render a centered placeholder
+        if wm.is_minimized(hwnd) then
+            local saved = HyprWin.floating_rects[hwnd]
+            if saved then
+                wx, wy, ww, wh = saved[1], saved[2], saved[3], saved[4]
+            else
+                wx, wy, ww, wh = sw / 4, sh / 4, sw / 2, sh / 2
+            end
+        end
+
         local scale_x = inner_w / sw
         local scale_y = inner_h / sh
 
