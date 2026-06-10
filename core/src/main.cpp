@@ -238,6 +238,10 @@ int main() {
         // Use SWP_NOACTIVATE and SWP_NOSENDCHANGING to optimize drawing
         SetWindowPos(handle, HWND_NOTOPMOST, finalX, finalY, finalW, finalH,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
+      } else {
+        // Fallback to normal SetWindowPos if DWM bounds are unavailable
+        SetWindowPos(handle, HWND_NOTOPMOST, (int)x, (int)y, (int)w, (int)h,
+                     SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       }
     });
 
