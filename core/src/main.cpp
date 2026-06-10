@@ -494,6 +494,8 @@ int main() {
     UnhookWinEvent(hook_focus);
     UnhookWinEvent(hook_minimize);
 
+    CleanupAltTabHook();
+
     RestoreAllWindows();
 
     if (result.valid()) {
