@@ -456,6 +456,9 @@ HyprWin.on_hotkey = function(id)
     end
 end
 
+HyprWin.on_alttab_action = function(action_type)
+    alttab.action(action_type)
+end
 
 HyprWin.windows = filtered
 HyprWin.retile()
