@@ -233,6 +233,9 @@ HyprWin.on_render = function()
     
     -- Render modular top bar
     topbar.draw()
+
+    -- Render custom modular Alt-Tab overlay
+    alttab.draw()
 end
 
 -- Initial scan
