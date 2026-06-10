@@ -11,7 +11,6 @@
 #include <string>
 #include <windows.h>
 
-// --- FIXED CODE LOCATOR: Header order ---
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>

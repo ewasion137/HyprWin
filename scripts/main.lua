@@ -1,3 +1,4 @@
+-- scripts/main.lua
 HyprWin = {}
 HyprWin.windows = {}
 HyprWin.focused_window = nil
@@ -17,7 +18,7 @@ local alttab = require("alttab")
 
 -- Helper to check if window still exists and is visible
 local function is_valid(hwnd)
-    return wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd)
+    return wm.is_window_visible(hwnd)
 end
 
 local window_rules = {
@@ -48,7 +49,6 @@ local function should_ignore(hwnd, title, class)
     return false
 end
 
--- --- FIXED CODE LOCATOR: retile logic ---
 HyprWin.retile = function()
     -- Deep clean the list before every math operation (Keep minimized windows!)
     local valid_windows = {}
@@ -173,7 +173,6 @@ HyprWin.retile = function()
     recursive_tile(tx, ty, tw, th, 1, n, 0)
 end
 
--- --- FIXED CODE LOCATOR: event dispatcher ---
 HyprWin.dispatch_event = function(event_type, hwnd, title)
     local class = wm.get_class_name(hwnd)
     if should_ignore(hwnd, title, class) then return end
@@ -184,6 +183,7 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         -- Catch window on focus if we missed its show event
         if not is_tracked(hwnd) and is_valid(hwnd) then
             table.insert(HyprWin.windows, hwnd)
+            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
             HyprWin.retile()
         end
         return
@@ -193,6 +193,7 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     if event_type == 0x8002 or event_type == 0x0017 then
         if not is_tracked(hwnd) then
             table.insert(HyprWin.windows, hwnd)
+            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
         end
         HyprWin.retile()
     end
@@ -216,23 +217,30 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     end
 end
 
--- Border rendering with safety checks
+-- Border rendering with safety checks and custom animation physics
 HyprWin.on_render = function()
+    local time = os.clock()
+    local pulse = 0.72 + 0.28 * math.sin(time * 3.8) -- Elegant real-time glow breathing
+    
     -- Only draw borders for windows we actually track on the current workspace
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
         if ws == HyprWin.current_workspace then
             local x, y, w, h = wm.get_window_rect(hwnd)
             if w > 0 then
-                -- Active window gets a thicker, brighter border
+                -- Active window gets custom hardware accelerated layered visual outline
                 if hwnd == HyprWin.focused_window then
-                    ui.draw_rect(x, y, w, h, 0.7, 0.4, 1.0, 1.0, 3.0) 
+                    -- Soft outer drop-shadow neon glow
+                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 0.7, 0.4, 1.0, 0.3 * pulse, 6.0)
+                    -- Hard inner sharp neon border
+                    ui.draw_rect(x, y, w, h, 0.8, 0.6, 1.0, 0.95, 1.5)
                 else
-                    -- Floating windows get a distinct orange border
+                    -- Floating windows get a distinct warm orange-gold border
                     if HyprWin.floating_windows[hwnd] then
-                        ui.draw_rect(x, y, w, h, 0.9, 0.6, 0.2, 0.8, 1.5)
+                        ui.draw_rect(x, y, w, h, 0.9, 0.6, 0.2, 0.7, 1.5)
                     else
-                        ui.draw_rect(x, y, w, h, 0.2, 0.2, 0.2, 0.8, 1.0)
+                        -- Low-profile subtle border for background workspace tiles
+                        ui.draw_rect(x, y, w, h, 0.12, 0.12, 0.15, 0.5, 1.0)
                     end
                 end
             end
@@ -246,7 +254,7 @@ HyprWin.on_render = function()
     alttab.draw()
 end
 
--- Initial scan
+-- Initial scan with strict workspace binding
 local existing = wm.enumerate_windows()
 local filtered = {}
 for _, hwnd in ipairs(existing) do
@@ -254,6 +262,7 @@ for _, hwnd in ipairs(existing) do
     local class = wm.get_class_name(hwnd)
     if not should_ignore(hwnd, title, class) then
         table.insert(filtered, hwnd)
+        HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
     end
 end
 
@@ -412,9 +421,9 @@ HyprWin.on_hotkey = function(id)
             wm.force_enable_resize(active_hwnd)
             if not is_tracked(active_hwnd) then
                 table.insert(HyprWin.windows, active_hwnd)
+                HyprWin.window_workspaces[active_hwnd] = HyprWin.current_workspace
             end
             HyprWin.floating_windows[active_hwnd] = nil
-            HyprWin.window_workspaces[active_hwnd] = HyprWin.current_workspace
             log("Force tiled window: " .. active_hwnd)
             HyprWin.retile()
         end

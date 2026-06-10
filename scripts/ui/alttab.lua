@@ -5,9 +5,9 @@ HyprWin.alttab_active = false
 HyprWin.alttab_index = 1
 HyprWin.alttab_windows = {}
 
--- Helper to check if window still exists and is visible
+-- Helper to check if window still exists (allows minimized now)
 local function is_valid(hwnd)
-    return wm.is_window_visible(hwnd) and not wm.is_minimized(hwnd)
+    return wm.is_window_visible(hwnd)
 end
 
 -- Process keyboard inputs from C++ hook
