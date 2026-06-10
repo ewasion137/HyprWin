@@ -1,10 +1,15 @@
 // --- FIXED CODE LOCATOR: renderer.cpp ---
 #include "../include/renderer.hpp"
 
+// Undefine conflicting Win32 macro to prevent Direct2D DrawText collision
+#ifdef DrawText
+#undef DrawText
+#endif
+
 // Initialize Direct2D factory and resources
 Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr), writeFactory(nullptr) {}
 
-Renderer::~Renderer() {
+Renderer::~ifndef_cleanup_macro {
   if (brush)
     brush->Release();
   if (target)
@@ -79,8 +84,8 @@ void Renderer::draw_text(const std::string& text, float x, float y, float size, 
 
   if (SUCCEEDED(hr)) {
     target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
-    // Render text with large bounding box boundary to prevent clipping
-    target->DrawTextW(wtext.c_str(), (UINT32)wtext.length(), textFormat,
+    // Call the original Direct2D DrawText method safely
+    target->DrawText(wtext.c_str(), (UINT32)wtext.length(), textFormat,
                      D2D1::RectF(x, y, x + 2000.0f, y + 500.0f), brush);
     brush->Release();
     textFormat->Release();

@@ -1,4 +1,4 @@
--- scripts/ui/topbar.lua
+-- --- FIXED CODE LOCATOR: scripts/ui/topbar.lua ---
 local topbar = {}
 
 local function get_workspace_window_count(ws_id)
@@ -12,7 +12,7 @@ local function get_workspace_window_count(ws_id)
     return count
 end
 
--- Render the top workspace bar
+-- Render the top workspace bar with real-time text and clocks
 function topbar.draw()
     local sw, _ = wm.get_screen_size()
     
@@ -20,7 +20,7 @@ function topbar.draw()
     ui.fill_rect(0, 0, sw, 35, 0.015, 0.015, 0.018, 0.88)
     ui.fill_rect(0, 35, sw, 1, 0.7, 0.4, 1.0, 0.25) -- Thin glowing separator
 
-    -- Render Workspace Indicators
+    -- Render Workspace Indicators (Pill/Dots)
     local start_x = 15
     local ind_y = 10
     local ind_w = 20
@@ -42,6 +42,27 @@ function topbar.draw()
         else
             -- Dim minimal dot for empty workspaces
             ui.fill_rect(x + 7, ind_y + 5, ind_w - 14, ind_h - 10, 0.12, 0.12, 0.15, 0.5)
+        end
+    end
+
+    -- Render System Time (Centered)
+    local time_str = os.date("%I:%M:%S %p")
+    local text_w = #time_str * 8.2 -- Average width approximation for Segoe UI 14pt
+    local center_x = (sw - text_w) / 2
+    ui.draw_text(time_str, center_x, 9, 14, 0.9, 0.9, 0.95, 0.95, "Segoe UI")
+
+    -- Render Active Window Title (Right Aligned)
+    local focused = HyprWin.focused_window
+    if focused then
+        local title = wm.get_window_title(focused)
+        if title and title ~= "" then
+            -- Truncate title if it's too long to prevent visual overlap
+            if #title > 45 then
+                title = string.sub(title, 1, 42) .. "..."
+            end
+            local title_w = #title * 7.5
+            local right_x = sw - title_w - 20
+            ui.draw_text(title, right_x, 10, 13, 0.7, 0.7, 0.75, 0.8, "Segoe UI")
         end
     end
 end
