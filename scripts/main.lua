@@ -13,6 +13,7 @@ local is_retiling = false
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
 
 local topbar = require("topbar")
+local alttab = require("alttab")
 
 -- Helper to check if window still exists and is visible
 local function is_valid(hwnd)
