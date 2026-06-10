@@ -315,6 +315,10 @@ int main() {
                                     float g, float b, float a) {
       g_renderer.fill_rect(x, y, w, h, r, g, b, a);
     });
+    ui.set_function("draw_text", [](std::string text, float x, float y, float size,
+                                    float r, float g, float b, float a, std::string font) {
+      g_renderer.draw_text(text, x, y, size, r, g, b, a, font);
+    });
     ui.set_function("render", []() {
       g_renderer.begin_draw();
       g_renderer.clear(0, 0, 0, 0); // Transparent background
