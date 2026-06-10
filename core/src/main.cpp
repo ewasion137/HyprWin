@@ -60,18 +60,21 @@ bool IsToplevelWindow(HWND hwnd) {
 }
 
 void RestoreAllWindows() {
+  static int offset = 0;
   EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
     if (IsWindowVisible(hwnd)) {
       RECT rc;
       GetWindowRect(hwnd, &rc);
       // Check if window is located in stashed workspace coordinates
       if (rc.left < -10000 || rc.top < -10000) {
-        SetWindowPos(hwnd, HWND_NOTOPMOST, 100, 100, 1280, 720, 
+        int* off = (int*)lParam;
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 100 + *off, 100 + *off, 1280, 720, 
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+        *off = (*off + 30) % 200; // Cascade on restore
       }
     }
     return TRUE;
-  }, 0);
+  }, (LPARAM)&offset);
 }
 
 BOOL WINAPI ConsoleHandler(DWORD ctrlType) {
