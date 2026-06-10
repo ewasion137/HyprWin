@@ -5,6 +5,7 @@
 #define SOL_ALL_SAFETIES_ON 1
 
 #include "../include/renderer.hpp"
+#include "../include/alttab.hpp"
 #include <dwmapi.h>
 #include <iostream>
 #include <string>
@@ -370,6 +371,12 @@ int main() {
 
     if (!hook_objects || !hook_focus || !hook_minimize) {
       std::cerr << "HyprWin: Failed to register WinEventHooks!" << std::endl;
+      return 1;
+    }
+
+    // Start our custom low-level Alt+Tab hook
+    if (!InitializeAltTabHook()) {
+      std::cerr << "HyprWin: Failed to register low-level Keyboard hook!" << std::endl;
       return 1;
     }
 
