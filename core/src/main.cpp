@@ -145,9 +145,9 @@ int main() {
     sol::state lua;
     g_lua = &lua;
 
-    // Open standard libraries safely
+    // Open standard libraries safely (including OS library for clocks/timers)
     lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string,
-                       sol::lib::math, sol::lib::table);
+                       sol::lib::math, sol::lib::table, sol::lib::os);
 
     // Bind a C++ function to Lua
     lua.set_function("log", [](std::string message) {
@@ -310,11 +310,16 @@ int main() {
       g_renderer.begin_draw();
       g_renderer.clear(0, 0, 0, 0); // Transparent background
 
-      // Call a Lua function to handle frame drawing
+      // Call a Lua function to handle frame drawing with full error catching
       if (g_lua) {
         sol::protected_function draw_func = (*g_lua)["HyprWin"]["on_render"];
-        if (draw_func.valid())
-          draw_func();
+        if (draw_func.valid()) {
+          auto result = draw_func();
+          if (!result.valid()) {
+            sol::error err = result;
+            std::cerr << "!!! LUA RENDER ERROR: " << err.what() << std::endl;
+          }
+        }
       }
 
       g_renderer.end_draw();
@@ -474,25 +479,34 @@ int main() {
 
       // Check if the foreground window is in fullscreen (e.g., games)
       HWND fg = GetForegroundWindow();
-      if (fg && fg != g_overlay_hwnd && !IsZoomed(fg)) {
-        RECT rc;
-        GetWindowRect(fg, &rc);
-        int screen_w = GetSystemMetrics(SM_CXSCREEN);
-        int screen_h = GetSystemMetrics(SM_CYSCREEN);
-        bool is_fullscreen = (rc.left <= 0 && rc.top <= 0 && rc.right >= screen_w && rc.bottom >= screen_h);
+      bool is_fullscreen = false;
 
-        if (is_fullscreen) {
-          if (IsWindowVisible(g_overlay_hwnd)) {
-            ShowWindow(g_overlay_hwnd, SW_HIDE);
-          }
-        } else {
-          if (!IsWindowVisible(g_overlay_hwnd)) {
-            ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
+      if (fg && fg != g_overlay_hwnd && !IsZoomed(fg)) {
+        char className[256] = {0};
+        GetClassNameA(fg, className, sizeof(className));
+        std::string cls(className);
+
+        // Never hide overlay if foreground is the desktop background, system tray, or explorer folders
+        if (cls != "WorkerW" && cls != "Progman" && cls != "Shell_TrayWnd" && cls != "HyprWinOverlay" && cls != "CabinetWClass") {
+          RECT rc;
+          if (SUCCEEDED(DwmGetWindowAttribute(fg, DWMWA_EXTENDED_FRAME_BOUNDS, &rc, sizeof(rc)))) {
+            int screen_w = GetSystemMetrics(SM_CXSCREEN);
+            int screen_h = GetSystemMetrics(SM_CYSCREEN);
+            is_fullscreen = (rc.left <= 0 && rc.top <= 0 && rc.right >= screen_w && rc.bottom >= screen_h);
           }
         }
-      } else if (fg && IsZoomed(fg)) {
-        // Maximized windows are not fullscreen, ensure overlay is visible
+      }
+
+      if (is_fullscreen) {
+        if (IsWindowVisible(g_overlay_hwnd)) {
+          char className[256] = {0};
+          GetClassNameA(fg, className, sizeof(className));
+          std::cout << "[Fullscreen Detect] Hiding overlay. Active window class: " << className << std::endl;
+          ShowWindow(g_overlay_hwnd, SW_HIDE);
+        }
+      } else {
         if (!IsWindowVisible(g_overlay_hwnd)) {
+          std::cout << "[Fullscreen Detect] Restoring overlay visibility." << std::endl;
           ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
         }
       }
