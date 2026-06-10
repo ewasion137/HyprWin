@@ -1,9 +1,9 @@
 -- scripts/ui/alttab.lua
 local alttab = {}
 
-HyprWin.alttab_active = false
-HyprWin.alttab_index = 1
-HyprWin.alttab_windows = {}
+HyprWin.alttab_active = HyprWin.alttab_active or false
+HyprWin.alttab_index = HyprWin.alttab_index or 1
+HyprWin.alttab_windows = HyprWin.alttab_windows or {}
 
 -- Helper to check if window still exists (allows minimized now)
 local function is_valid(hwnd)

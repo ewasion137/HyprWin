@@ -262,7 +262,7 @@ for _, hwnd in ipairs(existing) do
     local class = wm.get_class_name(hwnd)
     if not should_ignore(hwnd, title, class) then
         table.insert(filtered, hwnd)
-        HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+        HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace -- Safe initialization
     end
 end
 

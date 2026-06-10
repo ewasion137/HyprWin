@@ -188,8 +188,38 @@ int main() {
 
       // Bypass Windows focus stealing prevention using thread attachment
       HWND fg = GetForegroundWindow();
-      DWORD fgThread = GetWindowThreadProcessId(fg, NULL);
-      DWORD currentThread = GetCurrentThreadId();
+      if (fg && fg != g_overlay_hwnd && !IsZoomed(fg)) {
+        char className[256] = {0};
+        GetClassNameA(fg, className, sizeof(className));
+        std::string cls(className);
+
+        bool is_fullscreen = false;
+        // Never hide overlay if foreground is the desktop wallpaper, system trays, or taskbar
+        if (cls != "WorkerW" && cls != "Progman" && cls != "Shell_TrayWnd" && cls != "HyprWinOverlay") {
+          RECT rc;
+          if (FAILED(DwmGetWindowAttribute(fg, DWMWA_EXTENDED_FRAME_BOUNDS, &rc, sizeof(rc)))) {
+            GetWindowRect(fg, &rc);
+          }
+          int screen_w = GetSystemMetrics(SM_CXSCREEN);
+          int screen_h = GetSystemMetrics(SM_CYSCREEN);
+          is_fullscreen = (rc.left <= 0 && rc.top <= 0 && rc.right >= screen_w && rc.bottom >= screen_h);
+        }
+
+        if (is_fullscreen) {
+          if (IsWindowVisible(g_overlay_hwnd)) {
+            ShowWindow(g_overlay_hwnd, SW_HIDE);
+          }
+        } else {
+          if (!IsWindowVisible(g_overlay_hwnd)) {
+            ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
+          }
+        }
+      } else if (fg && IsZoomed(fg)) {
+        // Maximized windows are not fullscreen, ensure overlay is visible
+        if (!IsWindowVisible(g_overlay_hwnd)) {
+          ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
+        }
+      }
 
       if (fgThread != currentThread && fgThread != 0) {
         AttachThreadInput(currentThread, fgThread, TRUE);
