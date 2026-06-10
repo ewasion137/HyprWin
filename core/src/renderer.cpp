@@ -1,7 +1,8 @@
+// --- FIXED CODE LOCATOR: renderer.cpp ---
 #include "../include/renderer.hpp"
 
 // Initialize Direct2D factory and resources
-Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr) {}
+Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr), writeFactory(nullptr) {}
 
 Renderer::~Renderer() {
   if (brush)
@@ -10,10 +11,16 @@ Renderer::~Renderer() {
     target->Release();
   if (factory)
     factory->Release();
+  if (writeFactory)
+    writeFactory->Release(); // Safely release DirectWrite resource on exit
 }
 
 bool Renderer::init(HWND hwnd) {
   D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory);
+  
+  // Create shared DirectWrite factory
+  DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)&writeFactory);
+
   RECT rc;
   GetClientRect(hwnd, &rc);
 
@@ -55,6 +62,29 @@ void Renderer::fill_rect(float x, float y, float w, float h, float r, float g,
   target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
   target->FillRectangle(D2D1::RectF(x, y, x + w, y + h), brush);
   brush->Release();
+}
+
+// Render dynamic text on the transparent overlay using DirectWrite
+void Renderer::draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName) {
+  if (!target || !writeFactory) return;
+
+  IDWriteTextFormat* textFormat = nullptr;
+  std::wstring wfont(fontName.begin(), fontName.end());
+  std::wstring wtext(text.begin(), text.end());
+
+  // Create temporary text format dynamically for resizing on the fly
+  HRESULT hr = writeFactory->CreateTextFormat(
+      wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+      DWRITE_FONT_STRETCH_NORMAL, size, L"", &textFormat);
+
+  if (SUCCEEDED(hr)) {
+    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+    // Render text with large bounding box boundary to prevent clipping
+    target->DrawTextW(wtext.c_str(), (UINT32)wtext.length(), textFormat,
+                     D2D1::RectF(x, y, x + 2000.0f, y + 500.0f), brush);
+    brush->Release();
+    textFormat->Release();
+  }
 }
 
 void Renderer::clear(float r, float g, float b, float a) {
