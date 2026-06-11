@@ -7,6 +7,7 @@
 #include "../include/renderer.hpp"
 #include "../include/alttab.hpp"
 #include <dwmapi.h>
+#include <shellapi.h>
 #include <iostream>
 #include <string>
 #include <windows.h>
@@ -23,6 +24,38 @@ extern "C" {
 sol::state *g_lua = nullptr;
 Renderer g_renderer;
 HWND g_overlay_hwnd = NULL;
+
+static FILETIME g_prev_idle_time = {0};
+static FILETIME g_prev_kernel_time = {0};
+static FILETIME g_prev_user_time = {0};
+
+double GetCPUUsage() {
+  FILETIME idleTime, kernelTime, userTime;
+  if (GetSystemTimes(&idleTime, &kernelTime, &userTime)) {
+    ULARGE_INTEGER idle, kernel, user;
+    idle.LowPart = idleTime.dwLowDateTime; idle.HighPart = idleTime.dwHighDateTime;
+    kernel.LowPart = kernelTime.dwLowDateTime; kernel.HighPart = kernelTime.dwHighDateTime;
+    user.LowPart = userTime.dwLowDateTime; user.HighPart = userTime.dwHighDateTime;
+
+    ULARGE_INTEGER prev_idle, prev_kernel, prev_user;
+    prev_idle.LowPart = g_prev_idle_time.dwLowDateTime; prev_idle.HighPart = g_prev_idle_time.dwHighDateTime;
+    prev_kernel.LowPart = g_prev_kernel_time.dwLowDateTime; prev_kernel.HighPart = g_prev_kernel_time.dwHighDateTime;
+    prev_user.LowPart = g_prev_user_time.dwLowDateTime; prev_user.HighPart = g_prev_user_time.dwHighDateTime;
+
+    ULONGLONG idle_diff = idle.QuadPart - prev_idle.QuadPart;
+    ULONGLONG kernel_diff = kernel.QuadPart - prev_kernel.QuadPart;
+    ULONGLONG user_diff = user.QuadPart - prev_user.QuadPart;
+
+    g_prev_idle_time = idleTime;
+    g_prev_kernel_time = kernelTime;
+    g_prev_user_time = userTime;
+
+    ULONGLONG total = kernel_diff + user_diff;
+    if (total == 0) return 0.0;
+    return (double)(total - idle_diff) * 100.0 / total;
+  }
+  return 0.0;
+}
 
 bool IsToplevelWindow(HWND hwnd) {
   DWORD pid;
@@ -174,6 +207,21 @@ int main() {
 
     wm.set_function("get_foreground_window", []() {
       return (size_t)GetForegroundWindow();
+    });
+
+    wm.set_function("get_cpu_usage", []() {
+      return GetCPUUsage();
+    });
+
+    wm.set_function("get_ram_usage", []() {
+      MEMORYSTATUSEX memInfo;
+      memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+      GlobalMemoryStatusEx(&memInfo);
+      return (double)memInfo.dwMemoryLoad;
+    });
+
+    wm.set_function("spawn", [](std::string command) {
+      ShellExecuteA(NULL, "open", command.c_str(), NULL, NULL, SW_SHOWNORMAL);
     });
 
     wm.set_function("focus_window", [](size_t hwnd) {
