@@ -22,9 +22,15 @@ public:
     // Hardware-accelerated text rendering using DirectWrite text layout
     void draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName);
 
+    // Returns the pixel width of a text string for layout calculations
+    float measure_text_width(const std::string& text, float size, const std::string& fontName);
+
 private:
-    ID2D1Factory* factory;
+    ID2D1Factory*          factory;
     ID2D1HwndRenderTarget* target;
-    ID2D1SolidColorBrush* brush;
-    IDWriteFactory* writeFactory; // DirectWrite factory pointer
+    ID2D1SolidColorBrush*  brush;
+    IDWriteFactory*        writeFactory;
+
+    // Creates (or reuses) the shared solid brush with the given color
+    void set_brush_color(float r, float g, float b, float a);
 };

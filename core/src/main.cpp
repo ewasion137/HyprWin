@@ -375,6 +375,11 @@ int main() {
                                     float r, float g, float b, float a, std::string font) {
       g_renderer.draw_text(text, x, y, size, r, g, b, a, font);
     });
+
+    // Returns pixel width of a string — useful for right-aligning text in Lua
+    ui.set_function("measure_text", [](std::string text, float size, std::string font) {
+      return g_renderer.measure_text_width(text, size, font);
+    });
     ui.set_function("render", []() {
       g_renderer.begin_draw();
       g_renderer.clear(0, 0, 0, 0); // Transparent background
@@ -591,21 +596,13 @@ int main() {
       }
     }
 
-    // Unregister hotkeys on exit
+    // Unregister all hotkeys on clean exit
     for (int i = 101; i <= 109; ++i) UnregisterHotKey(NULL, i);
     for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
-    UnregisterHotKey(NULL, 301);
-    UnregisterHotKey(NULL, 302);
-    UnregisterHotKey(NULL, 303);
-    UnregisterHotKey(NULL, 304);
-    UnregisterHotKey(NULL, 305);
-    UnregisterHotKey(NULL, 306);
+    for (int i = 301; i <= 306; ++i) UnregisterHotKey(NULL, i);
     for (int i = 401; i <= 404; ++i) UnregisterHotKey(NULL, i);
     for (int i = 501; i <= 504; ++i) UnregisterHotKey(NULL, i);
-    UnregisterHotKey(NULL, 601);
-    UnregisterHotKey(NULL, 602);
-    UnregisterHotKey(NULL, 603);
-    UnregisterHotKey(NULL, 604);
+    for (int i = 601; i <= 604; ++i) UnregisterHotKey(NULL, i);
 
     UnhookWinEvent(hook_objects);
     UnhookWinEvent(hook_focus);
@@ -614,10 +611,6 @@ int main() {
     CleanupAltTabHook();
 
     RestoreAllWindows();
-
-    if (result.valid()) {
-      std::cout << "HyprWin: Lua test passed." << std::endl;
-    }
 
   } catch (const sol::error &e) {
     std::cerr << "!!! LUA ERROR: " << e.what() << std::endl;

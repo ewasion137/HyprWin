@@ -245,23 +245,20 @@ local function lerp(current, target, speed)
 end
 
 -- Enhanced layout logic with Master-Stack support
-local function get_layout_engine()
-    if HyprWin.layout_mode == "master" then
-        return function(tx, ty, tw, th, windows)
-            local n = #windows
-            if n == 1 then
-                wm.move_window(windows[1], tx, ty, tw, th)
-            else
-                local m_w = math.floor(tw * (HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5))
-                wm.move_window(windows[1], tx, ty, m_w - 10, th)
-                local s_h = math.floor((th - (10 * (n - 2))) / (n - 1))
-                for i = 2, n do
-                    wm.move_window(windows[i], tx + m_w, ty + (i - 2) * (s_h + 10), tw - m_w, s_h)
-                end
-            end
-        end
+-- (master mode is handled inside retile via layout_mode flag)
+local function get_master_tiles(tx, ty, tw, th, windows)
+    local n = #windows
+    if n == 1 then
+        wm.move_window(windows[1], tx, ty, tw, th)
+        return
     end
-    -- Fallback to recursive BSP (implementation remains in the original script)
+    local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
+    local m_w   = math.floor(tw * ratio)
+    wm.move_window(windows[1], tx, ty, m_w - 10, th)
+    local s_h = math.floor((th - (10 * (n - 2))) / (n - 1))
+    for i = 2, n do
+        wm.move_window(windows[i], tx + m_w, ty + (i - 2) * (s_h + 10), tw - m_w, s_h)
+    end
 end
 
 HyprWin.on_render = function()
@@ -302,17 +299,18 @@ for _, hwnd in ipairs(existing) do
     end
 end
 
-local function focus_direction(dir)
+-- Returns the nearest tiled window in the given direction relative to focused
+local function find_neighbor(dir)
     local focused = HyprWin.focused_window
-    if not focused then return end
-    
+    if not focused then return nil end
+
     local fx, fy, fw, fh = wm.get_window_rect(focused)
     local fcx = fx + fw / 2
     local fcy = fy + fh / 2
-    
+
     local best_hwnd = nil
     local best_dist = math.huge
-    
+
     for _, hwnd in ipairs(HyprWin.windows) do
         if hwnd ~= focused and not HyprWin.floating_windows[hwnd] then
             local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
@@ -320,20 +318,13 @@ local function focus_direction(dir)
                 local x, y, w, h = wm.get_window_rect(hwnd)
                 local cx = x + w / 2
                 local cy = y + h / 2
-                
-                local is_in_dir = false
-                if dir == "left" and cx < fcx then
-                    is_in_dir = true
-                elseif dir == "right" and cx > fcx then
-                    is_in_dir = true
-                elseif dir == "up" and cy < fcy then
-                    is_in_dir = true
-                elseif dir == "down" and cy > fcy then
-                    is_in_dir = true
-                end
-                
-                if is_in_dir then
-                    -- Calculate Manhattan distance between windows
+
+                local valid = (dir == "left"  and cx < fcx)
+                           or (dir == "right" and cx > fcx)
+                           or (dir == "up"    and cy < fcy)
+                           or (dir == "down"  and cy > fcy)
+
+                if valid then
                     local dist = math.abs(cx - fcx) + math.abs(cy - fcy)
                     if dist < best_dist then
                         best_dist = dist
@@ -343,64 +334,29 @@ local function focus_direction(dir)
             end
         end
     end
-    
-    if best_hwnd then
-        wm.focus_window(best_hwnd)
-    end
+
+    return best_hwnd
+end
+
+local function focus_direction(dir)
+    local target = find_neighbor(dir)
+    if target then wm.focus_window(target) end
 end
 
 local function swap_direction(dir)
     local focused = HyprWin.focused_window
-    if not focused then return end
-    
-    local fx, fy, fw, fh = wm.get_window_rect(focused)
-    local fcx = fx + fw / 2
-    local fcy = fy + fh / 2
-    
-    local target_hwnd = nil
-    local best_dist = math.huge
-    
-    for _, hwnd in ipairs(HyprWin.windows) do
-        if hwnd ~= focused and not HyprWin.floating_windows[hwnd] then
-            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-            if ws == HyprWin.current_workspace then
-                local x, y, w, h = wm.get_window_rect(hwnd)
-                local cx = x + w / 2
-                local cy = y + h / 2
-                
-                local is_in_dir = false
-                if dir == "left" and cx < fcx then
-                    is_in_dir = true
-                elseif dir == "right" and cx > fcx then
-                    is_in_dir = true
-                elseif dir == "up" and cy < fcy then
-                    is_in_dir = true
-                elseif dir == "down" and cy > fcy then
-                    is_in_dir = true
-                end
-                
-                if is_in_dir then
-                    local dist = math.abs(cx - fcx) + math.abs(cy - fcy)
-                    if dist < best_dist then
-                        best_dist = dist
-                        target_hwnd = hwnd
-                    end
-                end
-            end
-        end
+    local target  = find_neighbor(dir)
+    if not focused or not target then return end
+
+    local idx1, idx2 = nil, nil
+    for i, hwnd in ipairs(HyprWin.windows) do
+        if hwnd == focused then idx1 = i end
+        if hwnd == target  then idx2 = i end
     end
-    
-    if target_hwnd then
-        local idx1, idx2 = nil, nil
-        for i, hwnd in ipairs(HyprWin.windows) do
-            if hwnd == focused then idx1 = i end
-            if hwnd == target_hwnd then idx2 = i end
-        end
-        
-        if idx1 and idx2 then
-            HyprWin.windows[idx1], HyprWin.windows[idx2] = HyprWin.windows[idx2], HyprWin.windows[idx1]
-            HyprWin.retile()
-        end
+
+    if idx1 and idx2 then
+        HyprWin.windows[idx1], HyprWin.windows[idx2] = HyprWin.windows[idx2], HyprWin.windows[idx1]
+        HyprWin.retile()
     end
 end
 

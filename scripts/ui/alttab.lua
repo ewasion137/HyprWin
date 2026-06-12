@@ -154,6 +154,22 @@ function alttab.draw()
             ui.fill_rect(sx, sy, sww, shh, 0.25, 0.25, 0.3, 0.3)
             ui.draw_rect(sx, sy, sww, shh, 0.4, 0.4, 0.45, 0.6, 1.0)
         end
+
+        -- Window title label below the card
+        local raw_title = wm.get_window_title(hwnd)
+        local max_chars = 14
+        local label = (string.len(raw_title) > max_chars)
+            and (string.sub(raw_title, 1, max_chars) .. "…")
+            or raw_title
+
+        local lx = item_x + (item_w - ui.measure_text(label, 10, "Segoe UI Variable")) / 2
+        local ly = item_y + item_h - 16
+
+        if is_selected then
+            ui.draw_text(label, lx, ly, 10, 0.9, 0.7, 1.0, 1.0, "Segoe UI Variable")
+        else
+            ui.draw_text(label, lx, ly, 10, 0.55, 0.55, 0.60, 0.80, "Segoe UI Variable")
+        end
     end
 end
 

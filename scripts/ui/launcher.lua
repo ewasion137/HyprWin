@@ -1,26 +1,30 @@
--- scripts/ui/launcher.lua
 local launcher = {}
 
 HyprWin.launcher_active = false
-HyprWin.launcher_index = 1
+HyprWin.launcher_index  = 1
 
--- List of favorite apps to launch (Add or modify paths freely)
+local FONT        = "Segoe UI Variable"
+local ITEM_H      = 38
+local ITEM_MARGIN = 6
+local PADDING     = 20
+
+-- App list — paths are passed directly to ShellExecute (wm.spawn)
 local apps = {
-    { name = "Brave Browser", path = "brave.exe" },
-    { name = "Visual Studio Code", path = "code" },
-    { name = "Discord", path = "discord" },
-    { name = "FL Studio 2025", path = "FL64.exe" },
-    { name = "Task Manager", path = "taskmgr.exe" },
-    { name = "Command Prompt", path = "cmd.exe" },
-    { name = "Explorer File Manager", path = "explorer.exe /separate,C:\\" }
+    { name = "Brave Browser",         path = "brave.exe"                         },
+    { name = "Visual Studio Code",    path = "code"                              },
+    { name = "Discord",               path = "discord"                           },
+    { name = "FL Studio 2025",        path = "FL64.exe"                          },
+    { name = "Task Manager",          path = "taskmgr.exe"                       },
+    { name = "Command Prompt",        path = "cmd.exe"                           },
+    { name = "File Explorer",         path = "explorer.exe"                      },
 }
 
 function launcher.toggle()
     HyprWin.launcher_active = not HyprWin.launcher_active
-    HyprWin.launcher_index = 1
+    HyprWin.launcher_index  = 1
 end
 
--- Navigate inside the launcher utilizing your standard Vim hotkeys
+-- Navigate the list with Vim-style keys (J/K)
 function launcher.navigate(dir)
     if not HyprWin.launcher_active then return end
     if dir == "down" then
@@ -32,7 +36,7 @@ function launcher.navigate(dir)
     end
 end
 
--- Execute the selected application and close menu
+-- Execute selected app and close the launcher
 function launcher.commit()
     if not HyprWin.launcher_active then return end
     local app = apps[HyprWin.launcher_index]
@@ -42,25 +46,48 @@ function launcher.commit()
     HyprWin.launcher_active = false
 end
 
--- Draw the beautiful launcher overlay card
 function launcher.draw(alpha)
     if alpha < 0.01 then return end
 
     local sw, sh = wm.get_screen_size()
-    local w, h = 500, 400
-    local x, y = (sw - w) / 2, (sh - h) / 2 - (20 * (1 - alpha)) -- Slight slide-up
 
-    -- Glassmorphism effect
-    ui.fill_rounded_rect(x, y, w, h, 15, 0.01, 0.01, 0.02, 0.95 * alpha)
-    ui.draw_rounded_rect(x, y, w, h, 15, 0.2, 0.8, 0.7, 0.8 * alpha, 2)
+    local panel_w = 480
+    local panel_h = PADDING * 2 + 50 + (#apps * (ITEM_H + ITEM_MARGIN))
+    local panel_x = (sw - panel_w) / 2
+    -- Slide-up entrance animation driven by alpha
+    local panel_y = (sh - panel_h) / 2 - (18 * (1 - alpha))
 
-    -- Search bar visual
-    ui.fill_rounded_rect(x + 20, y + 20, w - 40, 40, 8, 0.05, 0.05, 0.08, 1 * alpha)
-    ui.draw_text("Search apps...", x + 35, y + 30, 14, 0.5, 0.5, 0.5, 0.6 * alpha, "Segoe UI Variable")
-    
-    -- Active selection highlight
-    local item_y = y + 80 + (HyprWin.launcher_index - 1) * 40
-    ui.fill_rounded_rect(x + 20, item_y, w - 40, 35, 6, 0.2, 0.8, 0.7, 0.2 * alpha)
+    -- Glassmorphism card background
+    ui.fill_rounded_rect(panel_x, panel_y, panel_w, panel_h, 14, 0.01, 0.01, 0.02, 0.95 * alpha)
+    ui.draw_rounded_rect(panel_x, panel_y, panel_w, panel_h, 14, 0.20, 0.80, 0.70, 0.80 * alpha, 1.8)
+
+    -- Search bar header (static label — real search input requires IME work outside scope)
+    local sb_x = panel_x + PADDING
+    local sb_y = panel_y + PADDING
+    local sb_w = panel_w - PADDING * 2
+    ui.fill_rounded_rect(sb_x, sb_y, sb_w, 36, 8, 0.05, 0.05, 0.08, alpha)
+    ui.draw_rounded_rect(sb_x, sb_y, sb_w, 36, 8, 0.20, 0.80, 0.70, 0.40 * alpha, 1)
+    ui.draw_text("  Launch", sb_x + 10, sb_y + 10, 14, 0.55, 0.55, 0.60, 0.70 * alpha, FONT)
+
+    -- App entry list
+    local list_start_y = sb_y + 36 + ITEM_MARGIN + 4
+
+    for i, app in ipairs(apps) do
+        local ix = sb_x
+        local iy = list_start_y + (i - 1) * (ITEM_H + ITEM_MARGIN)
+
+        local is_sel = (i == HyprWin.launcher_index)
+
+        if is_sel then
+            -- Selected row: teal-tinted highlight
+            ui.fill_rounded_rect(ix, iy, sb_w, ITEM_H, 7, 0.10, 0.50, 0.45, 0.35 * alpha)
+            ui.draw_rounded_rect(ix, iy, sb_w, ITEM_H, 7, 0.20, 0.80, 0.70, 0.70 * alpha, 1.2)
+            ui.draw_text(app.name, ix + 14, iy + (ITEM_H - 14) / 2, 14, 0.90, 0.95, 0.95, alpha, FONT)
+        else
+            ui.fill_rounded_rect(ix, iy, sb_w, ITEM_H, 7, 0.04, 0.04, 0.06, 0.60 * alpha)
+            ui.draw_text(app.name, ix + 14, iy + (ITEM_H - 14) / 2, 13, 0.60, 0.62, 0.68, 0.85 * alpha, FONT)
+        end
+    end
 end
 
 return launcher

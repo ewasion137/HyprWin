@@ -1,7 +1,6 @@
-// --- FIXED CODE LOCATOR: scripts/core/src/renderer.cpp ---
 #include "../include/renderer.hpp"
 
-// Initialize Direct2D factory and resources
+// Zero-initialize all COM pointers to prevent invalid Release() calls
 Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr), writeFactory(nullptr) {}
 
 Renderer::~Renderer() {
@@ -48,34 +47,29 @@ void Renderer::end_draw() {
 
 void Renderer::draw_rect(float x, float y, float w, float h, float r, float g,
                          float b, float a, float thickness) {
-  if (!target)
-    return;
-  target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+  if (!target) return;
+  set_brush_color(r, g, b, a);
   target->DrawRectangle(D2D1::RectF(x, y, x + w, y + h), brush, thickness);
-  brush->Release();
 }
 
 void Renderer::fill_rect(float x, float y, float w, float h, float r, float g, float b, float a) {
   if (!target) return;
-  target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+  set_brush_color(r, g, b, a);
   target->FillRectangle(D2D1::RectF(x, y, x + w, y + h), brush);
-  brush->Release();
 }
 
 void Renderer::draw_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a, float thickness) {
     if (!target) return;
-    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+    set_brush_color(r, g, b, a);
     D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), radius, radius);
     target->DrawRoundedRectangle(roundedRect, brush, thickness);
-    brush->Release();
 }
 
 void Renderer::fill_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a) {
     if (!target) return;
-    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+    set_brush_color(r, g, b, a);
     D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), radius, radius);
     target->FillRoundedRectangle(roundedRect, brush);
-    brush->Release();
 }
 
 // Render dynamic text on the transparent overlay using DirectWrite text layout
@@ -86,31 +80,60 @@ void Renderer::draw_text(const std::string& text, float x, float y, float size, 
   std::wstring wfont(fontName.begin(), fontName.end());
   std::wstring wtext(text.begin(), text.end());
 
-  // Create temporary text format dynamically for resizing on the fly
   HRESULT hr = writeFactory->CreateTextFormat(
       wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
       DWRITE_FONT_STRETCH_NORMAL, size, L"", &textFormat);
 
   if (SUCCEEDED(hr)) {
     IDWriteTextLayout* textLayout = nullptr;
-    
-    // Create text layout to calculate formatting and size on the fly
     hr = writeFactory->CreateTextLayout(
         wtext.c_str(), (UINT32)wtext.length(), textFormat,
         2000.0f, 500.0f, &textLayout);
 
     if (SUCCEEDED(hr)) {
-      target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
-      
-      D2D1_POINT_2F origin = D2D1::Point2F(x, y);
-      
-      // DrawTextLayout does NOT collide with any winuser.h macros
-      target->DrawTextLayout(origin, textLayout, brush);
-
-      brush->Release();
+      set_brush_color(r, g, b, a);
+      target->DrawTextLayout(D2D1::Point2F(x, y), textLayout, brush);
       textLayout->Release();
     }
     textFormat->Release();
+  }
+}
+
+// Returns the rendered pixel width of a string, useful for right-aligning text
+float Renderer::measure_text_width(const std::string& text, float size, const std::string& fontName) {
+  if (!writeFactory) return 0.0f;
+
+  IDWriteTextFormat* fmt = nullptr;
+  std::wstring wfont(fontName.begin(), fontName.end());
+  std::wstring wtext(text.begin(), text.end());
+
+  HRESULT hr = writeFactory->CreateTextFormat(
+      wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+      DWRITE_FONT_STRETCH_NORMAL, size, L"", &fmt);
+
+  if (!SUCCEEDED(hr)) return 0.0f;
+
+  IDWriteTextLayout* layout = nullptr;
+  hr = writeFactory->CreateTextLayout(wtext.c_str(), (UINT32)wtext.length(), fmt, 4000.0f, 500.0f, &layout);
+
+  float width = 0.0f;
+  if (SUCCEEDED(hr)) {
+    DWRITE_TEXT_METRICS metrics = {};
+    if (SUCCEEDED(layout->GetMetrics(&metrics)))
+      width = metrics.width;
+    layout->Release();
+  }
+
+  fmt->Release();
+  return width;
+}
+
+// Internal helper: reuse the single brush by changing its color instead of re-creating it
+void Renderer::set_brush_color(float r, float g, float b, float a) {
+  if (!brush) {
+    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+  } else {
+    brush->SetColor(D2D1::ColorF(r, g, b, a));
   }
 }
 
