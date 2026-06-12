@@ -55,13 +55,27 @@ void Renderer::draw_rect(float x, float y, float w, float h, float r, float g,
   brush->Release();
 }
 
-void Renderer::fill_rect(float x, float y, float w, float h, float r, float g,
-                         float b, float a) {
-  if (!target)
-    return;
+void Renderer::fill_rect(float x, float y, float w, float h, float r, float g, float b, float a) {
+  if (!target) return;
   target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
   target->FillRectangle(D2D1::RectF(x, y, x + w, y + h), brush);
   brush->Release();
+}
+
+void Renderer::draw_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a, float thickness) {
+    if (!target) return;
+    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+    D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), radius, radius);
+    target->DrawRoundedRectangle(roundedRect, brush, thickness);
+    brush->Release();
+}
+
+void Renderer::fill_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a) {
+    if (!target) return;
+    target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
+    D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), radius, radius);
+    target->FillRoundedRectangle(roundedRect, brush);
+    brush->Release();
 }
 
 // Render dynamic text on the transparent overlay using DirectWrite text layout

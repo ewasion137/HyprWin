@@ -15,6 +15,8 @@ public:
     void end_draw();
     void draw_rect(float x, float y, float w, float h, float r, float g, float b, float a, float thickness);
     void fill_rect(float x, float y, float w, float h, float r, float g, float b, float a);
+    void draw_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a, float thickness);
+    void fill_rounded_rect(float x, float y, float w, float h, float radius, float r, float g, float b, float a);
     void clear(float r, float g, float b, float a);
     
     // Hardware-accelerated text rendering using DirectWrite text layout

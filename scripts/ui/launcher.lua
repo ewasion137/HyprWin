@@ -43,38 +43,24 @@ function launcher.commit()
 end
 
 -- Draw the beautiful launcher overlay card
-function launcher.draw()
-    if not HyprWin.launcher_active then return end
+function launcher.draw(alpha)
+    if alpha < 0.01 then return end
 
     local sw, sh = wm.get_screen_size()
-    local w = 450
-    local h = (#apps * 35) + 40
-    local x = (sw - w) / 2
-    local y = (sh - h) / 2
+    local w, h = 500, 400
+    local x, y = (sw - w) / 2, (sh - h) / 2 - (20 * (1 - alpha)) -- Slight slide-up
 
-    -- Draw glass backdrop card with bright green/cyan cyberpunk outline
-    ui.fill_rect(x, y, w, h, 0.02, 0.02, 0.03, 0.94)
-    ui.draw_rect(x, y, w, h, 0.2, 0.8, 0.7, 1.0, 2.0)
+    -- Glassmorphism effect
+    ui.fill_rounded_rect(x, y, w, h, 15, 0.01, 0.01, 0.02, 0.95 * alpha)
+    ui.draw_rounded_rect(x, y, w, h, 15, 0.2, 0.8, 0.7, 0.8 * alpha, 2)
 
-    -- Draw Title Header
-    ui.draw_text("SYSTEM APPLICATION LAUNCHER", x + 20, y + 15, 12, 0.2, 0.8, 0.7, 0.8, "Segoe UI")
-    ui.fill_rect(x + 20, y + 35, w - 40, 1, 0.2, 0.8, 0.7, 0.3)
-
-    -- Draw list of apps
-    for i, app in ipairs(apps) do
-        local item_y = y + 45 + (i - 1) * 35
-        local is_selected = (i == HyprWin.launcher_index)
-
-        if is_selected then
-            -- Highlight active app
-            ui.fill_rect(x + 15, item_y, w - 30, 28, 0.1, 0.25, 0.22, 0.9)
-            ui.draw_rect(x + 15, item_y, w - 30, 28, 0.2, 0.8, 0.7, 0.9, 1.0)
-            ui.draw_text("> " .. app.name, x + 25, item_y + 6, 13, 0.2, 0.9, 0.8, 1.0, "Segoe UI")
-        else
-            -- Dim inactive app
-            ui.draw_text("  " .. app.name, x + 25, item_y + 6, 13, 0.7, 0.7, 0.75, 0.7, "Segoe UI")
-        end
-    end
+    -- Search bar visual
+    ui.fill_rounded_rect(x + 20, y + 20, w - 40, 40, 8, 0.05, 0.05, 0.08, 1 * alpha)
+    ui.draw_text("Search apps...", x + 35, y + 30, 14, 0.5, 0.5, 0.5, 0.6 * alpha, "Segoe UI Variable")
+    
+    -- Active selection highlight
+    local item_y = y + 80 + (HyprWin.launcher_index - 1) * 40
+    ui.fill_rounded_rect(x + 20, item_y, w - 40, 35, 6, 0.2, 0.8, 0.7, 0.2 * alpha)
 end
 
 return launcher

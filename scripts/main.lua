@@ -9,6 +9,8 @@ HyprWin.floating_rects = {}    -- Stores custom geometry {x, y, w, h} for floati
 HyprWin.sticky_windows = {}    -- Tracks pinned/sticky state (visible on all workspaces)
 HyprWin.fullscreen_windows = {} -- Tracks monocle-fullscreen state for each hwnd (boolean)
 HyprWin.workspace_ratios = {}  -- Stores split ratio (0.1 - 0.9) for each workspace
+HyprWin.layout_mode = "bsp"
+HyprWin.anim_speed = 0.15
 local is_retiling = false
 
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
@@ -231,43 +233,61 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     end
 end
 
--- Border rendering with safety checks and custom animation physics
-HyprWin.on_render = function()
-    local time = os.clock()
-    local pulse = 0.72 + 0.28 * math.sin(time * 3.8) -- Elegant real-time glow breathing
-    
-    -- Only draw borders for windows we actually track on the current workspace
-    for _, hwnd in ipairs(HyprWin.windows) do
-        local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-        if ws == HyprWin.current_workspace then
-            local x, y, w, h = wm.get_window_rect(hwnd)
-            if w > 0 then
-                -- Active window gets custom hardware accelerated layered visual outline
-                if hwnd == HyprWin.focused_window then
-                    -- Soft outer drop-shadow neon glow
-                    ui.draw_rect(x - 2, y - 2, w + 4, h + 4, 0.7, 0.4, 1.0, 0.3 * pulse, 6.0)
-                    -- Hard inner sharp neon border
-                    ui.draw_rect(x, y, w, h, 0.8, 0.6, 1.0, 0.95, 1.5)
-                else
-                    -- Floating windows get a distinct warm orange-gold border
-                    if HyprWin.floating_windows[hwnd] then
-                        ui.draw_rect(x, y, w, h, 0.9, 0.6, 0.2, 0.7, 1.5)
-                    else
-                        -- Low-profile subtle border for background workspace tiles
-                        ui.draw_rect(x, y, w, h, 0.12, 0.12, 0.15, 0.5, 1.0)
-                    end
+-- Global animation state for UI elements
+HyprWin.ui_anims = {
+    bar_y = -40,
+    launcher_alpha = 0,
+    alttab_scale = 0.8
+}
+
+local function lerp(current, target, speed)
+    return current + (target - current) * speed
+end
+
+-- Enhanced layout logic with Master-Stack support
+local function get_layout_engine()
+    if HyprWin.layout_mode == "master" then
+        return function(tx, ty, tw, th, windows)
+            local n = #windows
+            if n == 1 then
+                wm.move_window(windows[1], tx, ty, tw, th)
+            else
+                local m_w = math.floor(tw * (HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5))
+                wm.move_window(windows[1], tx, ty, m_w - 10, th)
+                local s_h = math.floor((th - (10 * (n - 2))) / (n - 1))
+                for i = 2, n do
+                    wm.move_window(windows[i], tx + m_w, ty + (i - 2) * (s_h + 10), tw - m_w, s_h)
                 end
             end
         end
     end
+    -- Fallback to recursive BSP (implementation remains in the original script)
+end
+
+HyprWin.on_render = function()
+    local time = os.clock()
     
-    -- Render modular top bar
-    topbar.draw()
+    -- Smooth UI animations
+    HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
+    HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
 
-    -- Render custom modular Alt-Tab overlay
+    -- Window Borders with Neon "Flow" effect
+    for _, hwnd in ipairs(HyprWin.windows) do
+        local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+        if ws == HyprWin.current_workspace and not wm.is_minimized(hwnd) then
+            local x, y, w, h = wm.get_window_rect(hwnd)
+            if hwnd == HyprWin.focused_window then
+                -- Multi-layered neon glow
+                local glow = 0.1 * math.sin(time * 5)
+                ui.draw_rounded_rect(x-3, y-3, w+6, h+6, 12, 0.5, 0.3, 1.0, 0.2 + glow, 8) -- Outer glow
+                ui.draw_rounded_rect(x, y, w, h, 8, 0.6, 0.4, 1.0, 1.0, 2.5) -- Sharp border
+            end
+        end
+    end
+
+    topbar.draw(HyprWin.ui_anims.bar_y)
     alttab.draw()
-
-    launcher.draw()
+    launcher.draw(HyprWin.ui_anims.launcher_alpha)
 end
 
 -- Initial scan with strict workspace binding
