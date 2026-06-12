@@ -15,6 +15,7 @@ package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/
 
 local topbar = require("topbar")
 local alttab = require("alttab")
+local launcher = require("launcher")
 
 -- Helper to check if window still exists and is visible
 local function is_valid(hwnd)
@@ -50,127 +51,140 @@ local function should_ignore(hwnd, title, class)
 end
 
 HyprWin.retile = function()
-    -- Deep clean the list before every math operation (Keep minimized windows!)
-    local valid_windows = {}
-    for _, hwnd in ipairs(HyprWin.windows) do
-        -- Do NOT check for minimizing here so they stay in our tracking list
-        if wm.is_window_visible(hwnd) and not wm.is_topmost(hwnd) then
-            table.insert(valid_windows, hwnd)
+    -- Guard against recursive re-entrancy layout updates to prevent thread stack overflow
+    if is_retiling then return end
+    is_retiling = true
+
+    -- Execute the entire layout math inside a protected call block
+    local success, err = pcall(function()
+        -- Deep clean the list before every math operation (Keep minimized windows!)
+        local valid_windows = {}
+        for _, hwnd in ipairs(HyprWin.windows) do
+            -- Do NOT check for minimizing here so they stay in our tracking list
+            if wm.is_window_visible(hwnd) and not wm.is_topmost(hwnd) then
+                table.insert(valid_windows, hwnd)
+            end
         end
-    end
-    HyprWin.windows = valid_windows
+        HyprWin.windows = valid_windows
 
-    -- Ensure every window is assigned to a workspace safely
-    for _, hwnd in ipairs(HyprWin.windows) do
-        if not HyprWin.window_workspaces[hwnd] then
-            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+        -- Ensure every window is assigned to a workspace safely
+        for _, hwnd in ipairs(HyprWin.windows) do
+            if not HyprWin.window_workspaces[hwnd] then
+                HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+            end
         end
-    end
 
-    -- Initialize workspace ratio if not set (default 0.5)
-    if not HyprWin.workspace_ratios[HyprWin.current_workspace] then
-        HyprWin.workspace_ratios[HyprWin.current_workspace] = 0.5
-    end
+        -- Initialize workspace ratio if not set (default 0.5)
+        if not HyprWin.workspace_ratios[HyprWin.current_workspace] then
+            HyprWin.workspace_ratios[HyprWin.current_workspace] = 0.5
+        end
 
-    -- Filter active workspace, floating, and sticky windows
-    local active_workspace_windows = {}
-    local fullscreen_hwnd = nil
+        -- Filter active workspace, floating, and sticky windows
+        local active_workspace_windows = {}
+        local fullscreen_hwnd = nil
 
-    for _, hwnd in ipairs(HyprWin.windows) do
-        local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-        local is_sticky = HyprWin.sticky_windows[hwnd]
-        local is_active_ws = (ws == HyprWin.current_workspace)
+        for _, hwnd in ipairs(HyprWin.windows) do
+            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+            local is_sticky = HyprWin.sticky_windows[hwnd]
+            local is_active_ws = (ws == HyprWin.current_workspace)
 
-        if is_active_ws or is_sticky then
-            -- Only tile if the window is NOT minimized
-            if not wm.is_minimized(hwnd) then
-                -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
-                if HyprWin.fullscreen_windows[hwnd] then
-                    fullscreen_hwnd = hwnd
-                end
+            if is_active_ws or is_sticky then
+                -- Only tile if the window is NOT minimized
+                if not wm.is_minimized(hwnd) then
+                    -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
+                    if HyprWin.fullscreen_windows[hwnd] then
+                        fullscreen_hwnd = hwnd
+                    end
 
-                if not HyprWin.floating_windows[hwnd] then
-                    table.insert(active_workspace_windows, hwnd)
-                else
-                    -- Restore floating or sticky window safely
-                    local x, y, _, _ = wm.get_window_rect(hwnd)
-                    if x < -10000 or y < -10000 then
-                        local saved_rect = HyprWin.floating_rects[hwnd]
-                        if saved_rect then
-                            wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
-                        else
-                            -- Fallback center position
-                            wm.move_window(hwnd, 150, 150, 1280, 720)
+                    if not HyprWin.floating_windows[hwnd] then
+                        table.insert(active_workspace_windows, hwnd)
+                    else
+                        -- Restore floating or sticky window safely
+                        local x, y, _, _ = wm.get_window_rect(hwnd)
+                        if x < -10000 or y < -10000 then
+                            local saved_rect = HyprWin.floating_rects[hwnd]
+                            if saved_rect then
+                                wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
+                            else
+                                -- Fallback center position
+                                wm.move_window(hwnd, 150, 150, 1280, 720)
+                            end
                         end
                     end
                 end
-            end
-        else
-            -- Save floating window layout before stashing it off-screen
-            if HyprWin.floating_windows[hwnd] then
-                local x, y, w, h = wm.get_window_rect(hwnd)
-                if x >= -10000 and y >= -10000 then
-                    HyprWin.floating_rects[hwnd] = { x, y, w, h }
-                end
-            end
-            -- Move off-screen to hide from view without minimizing
-            wm.move_window(hwnd, -32000, -32000, 800, 600)
-        end
-    end
-
-    local sw, sh = wm.get_screen_size()
-    local gap = 15
-    local bar_h = 35
-    
-    -- Correct work area
-    local tx, ty = gap, bar_h + gap
-    local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
-
-    -- Handle Monocle Fullscreen (respecting topbar)
-    if fullscreen_hwnd then
-        for _, hwnd in ipairs(active_workspace_windows) do
-            if hwnd == fullscreen_hwnd then
-                wm.move_window(hwnd, tx, ty, tw, th)
             else
+                -- Save floating window layout before stashing it off-screen
+                if HyprWin.floating_windows[hwnd] then
+                    local x, y, w, h = wm.get_window_rect(hwnd)
+                    if x >= -10000 and y >= -10000 then
+                        HyprWin.floating_rects[hwnd] = { x, y, w, h }
+                    end
+                end
+                -- Move off-screen to hide from view without minimizing
                 wm.move_window(hwnd, -32000, -32000, 800, 600)
             end
         end
-        return
-    end
 
-    local n = #active_workspace_windows
-    if n == 0 then return end
+        local sw, sh = wm.get_screen_size()
+        local gap = 15
+        local bar_h = 35
+        
+        -- Correct work area
+        local tx, ty = gap, bar_h + gap
+        local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
 
-    local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
-
-    -- Recursive BSP splitting with depth tracking
-    local function recursive_tile(x, y, w, h, first, last, depth)
-        depth = depth or 0
-        if first == last then
-            wm.move_window(active_workspace_windows[first], x, y, w, h)
+        -- Handle Monocle Fullscreen (respecting topbar)
+        if fullscreen_hwnd then
+            for _, hwnd in ipairs(active_workspace_windows) do
+                if hwnd == fullscreen_hwnd then
+                    wm.move_window(hwnd, tx, ty, tw, th)
+                else
+                    wm.move_window(hwnd, -32000, -32000, 800, 600)
+                end
+            end
             return
         end
 
-        local mid = math.floor((first + last) / 2)
+        local n = #active_workspace_windows
+        if n == 0 then return end
 
-        -- Apply adjustable ratio only to the main split (depth 0), others are balanced
-        local ratio = (depth == 0) and current_ratio or 0.5
+        local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
 
-        -- Choose split axis based on aspect ratio
-        if w > h then
-            -- Split vertically (left and right)
-            local w1 = math.floor((w - gap) * ratio)
-            recursive_tile(x, y, w1, h, first, mid, depth + 1)
-            recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last, depth + 1)
-        else
-            -- Split horizontally (top and bottom)
-            local h1 = math.floor((h - gap) * ratio)
-            recursive_tile(x, y, w, h1, first, mid, depth + 1)
-            recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last, depth + 1)
+        -- Recursive BSP splitting with depth tracking
+        local function recursive_tile(x, y, w, h, first, last, depth)
+            depth = depth or 0
+            if first == last then
+                wm.move_window(active_workspace_windows[first], x, y, w, h)
+                return
+            end
+
+            local mid = math.floor((first + last) / 2)
+
+            -- Apply adjustable ratio only to the main split (depth 0), others are balanced
+            local ratio = (depth == 0) and current_ratio or 0.5
+
+            -- Choose split axis based on aspect ratio
+            if w > h then
+                -- Split vertically (left and right)
+                local w1 = math.floor((w - gap) * ratio)
+                recursive_tile(x, y, w1, h, first, mid, depth + 1)
+                recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last, depth + 1)
+            else
+                -- Split horizontally (top and bottom)
+                local h1 = math.floor((h - gap) * ratio)
+                recursive_tile(x, y, w, h1, first, mid, depth + 1)
+                recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last, depth + 1)
+            end
         end
-    end
 
-    recursive_tile(tx, ty, tw, th, 1, n, 0)
+        recursive_tile(tx, ty, tw, th, 1, n, 0)
+    end)
+
+    -- Unlock retiling state and report any internal math errors safely
+    is_retiling = false
+    if not success then
+        log("RETILING ERROR: " .. tostring(err))
+    end
 end
 
 HyprWin.dispatch_event = function(event_type, hwnd, title)
@@ -252,6 +266,8 @@ HyprWin.on_render = function()
 
     -- Render custom modular Alt-Tab overlay
     alttab.draw()
+
+    launcher.draw()
 end
 
 -- Initial scan with strict workspace binding
@@ -440,12 +456,26 @@ HyprWin.on_hotkey = function(id)
             end
             HyprWin.retile()
         end
+    elseif id == 305 then
+        -- Toggle Application Launcher (Alt + D)
+        launcher.toggle()
+    elseif id == 306 then
+        -- Launch selected App (Alt + Enter)
+        launcher.commit()
     elseif id == 401 then
         focus_direction("left") -- H
     elseif id == 402 then
-        focus_direction("down") -- J
+        if HyprWin.launcher_active then
+            launcher.navigate("down")
+        else
+            focus_direction("down") -- J
+        end
     elseif id == 403 then
-        focus_direction("up")   -- K
+        if HyprWin.launcher_active then
+            launcher.navigate("up")
+        else
+            focus_direction("up")   -- K
+        end
     elseif id == 404 then
         focus_direction("right") -- L
     elseif id == 501 then

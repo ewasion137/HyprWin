@@ -489,6 +489,8 @@ int main() {
     RegisterHotKey(NULL, 302, MOD_ALT, 'P');
     RegisterHotKey(NULL, 303, MOD_ALT, 'T'); // Force Tile hotkey
     RegisterHotKey(NULL, 304, MOD_ALT, 'M'); // Fullscreen with topbar (Monocle)
+    RegisterHotKey(NULL, 305, MOD_ALT, 'D'); // Spawn Launcher (Rofi-like)
+    RegisterHotKey(NULL, 306, MOD_ALT, VK_RETURN); // Commit Launcher selection (Alt+Enter)
 
     // Focus Movement (Alt + H/J/K/L to avoid conflicts with IDEs)
     RegisterHotKey(NULL, 401, MOD_ALT, 'H');
@@ -588,6 +590,8 @@ int main() {
     UnregisterHotKey(NULL, 302);
     UnregisterHotKey(NULL, 303);
     UnregisterHotKey(NULL, 304);
+    UnregisterHotKey(NULL, 305);
+    UnregisterHotKey(NULL, 306);
     for (int i = 401; i <= 404; ++i) UnregisterHotKey(NULL, i);
     for (int i = 501; i <= 504; ++i) UnregisterHotKey(NULL, i);
     UnregisterHotKey(NULL, 601);

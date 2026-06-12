@@ -45,6 +45,12 @@ function topbar.draw()
         end
     end
 
+    -- Render hardware system resources stats
+    local cpu = math.floor(wm.get_cpu_usage() + 0.5)
+    local ram = math.floor(wm.get_ram_usage() + 0.5)
+    local stats_str = string.format("CPU: %d%% | RAM: %d%%", cpu, ram)
+    ui.draw_text(stats_str, 290, 10, 13, 0.2, 0.8, 0.6, 0.9, "Segoe UI")
+
     -- Render System Time (Centered)
     local time_str = os.date("%I:%M:%S %p")
     local text_w = #time_str * 8.2 -- Average width approximation for Segoe UI 14pt
