@@ -1,6 +1,8 @@
+-- --- FIXED CODE LOCATOR: scripts/ui/topbar.lua ---
 local topbar = {}
 
 local FONT        = "Segoe UI Variable"
+local ICON_FONT   = "Segoe MDL2 Assets"
 local BAR_HEIGHT  = 30
 local BAR_MARGIN  = 5
 local WS_BOX_W    = 18
@@ -35,43 +37,63 @@ function topbar.draw(anim_y)
     ui.fill_rounded_rect(bar_x, by, bar_w, BAR_HEIGHT, 10, 0.02, 0.02, 0.03, 0.90)
     ui.draw_rounded_rect(bar_x, by, bar_w, BAR_HEIGHT, 10, 0.7, 0.4, 1.0, 0.30, 1.5)
 
-    -- Workspace indicators
+    -- Workspace indicators with modern monitor symbols
     for i = 1, 9 do
         local is_active = (i == HyprWin.current_workspace)
         local has_wins  = (ws_window_count(i) > 0)
 
-        local cr, cg, cb, ca
-        if is_active then
-            cr, cg, cb, ca = 0.7, 0.4, 1.0, 1.0
-        elseif has_wins then
-            cr, cg, cb, ca = 0.4, 0.25, 0.65, 0.85
-        else
-            cr, cg, cb, ca = 0.15, 0.15, 0.20, 0.70
-        end
-
         local wx = bar_x + WS_OFFSET_X + (i - 1) * WS_SPACING
         local wy = by + (BAR_HEIGHT - WS_BOX_H) / 2
-        ui.fill_rounded_rect(wx, wy, WS_BOX_W, WS_BOX_H, 4, cr, cg, cb, ca)
 
-        -- Show number only on the active workspace to keep it clean
         if is_active then
+            -- Deep purple fill for active workspace
+            ui.fill_rounded_rect(wx, wy, WS_BOX_W, WS_BOX_H, 4, 0.7, 0.4, 1.0, 1.0)
             ui.draw_text(tostring(i), wx + 5, wy + 1, 11, 1, 1, 1, 1, FONT)
+        elseif has_wins then
+            -- Glassmorphic outline with a tiny screen icon for occupied workspaces
+            ui.fill_rounded_rect(wx, wy, WS_BOX_W, WS_BOX_H, 4, 0.4, 0.25, 0.65, 0.25)
+            ui.draw_rounded_rect(wx, wy, WS_BOX_W, WS_BOX_H, 4, 0.7, 0.4, 1.0, 0.40, 1.0)
+            ui.draw_text("\u{E7F4}", wx + 3, wy + 2, 9, 0.7, 0.4, 1.0, 0.85, ICON_FONT)
+        else
+            -- Plain dark fill for empty workspaces
+            ui.fill_rounded_rect(wx, wy, WS_BOX_W, WS_BOX_H, 4, 0.12, 0.12, 0.15, 0.70)
         end
     end
 
-    -- Right-side system stats (clock, CPU, RAM)
-    local cpu  = math.floor(wm.get_cpu_usage())
-    local ram  = math.floor(wm.get_ram_usage())
-    local time = get_time_string()
+    -- Dynamic Right-side system stats layout (Clock, Memory, CPU)
+    local cpu      = math.floor(wm.get_cpu_usage())
+    local ram      = math.floor(wm.get_ram_usage())
+    local time_str = get_time_string()
+    local ram_str  = string.format("%d%%", ram)
+    local cpu_str  = string.format("%d%%", cpu)
 
-    local stats = string.format("CPU %d%%  RAM %d%%  %s", cpu, ram, time)
+    local text_y   = by + (BAR_HEIGHT - 12) / 2 - 1
+    local icon_w   = 14
+    local spacing  = 16
 
-    -- Measure and right-align the stats string
-    local text_w  = ui.measure_text(stats, 12, FONT)
-    local text_x  = bar_x + bar_w - text_w - 15
-    local text_y  = by + (BAR_HEIGHT - 12) / 2 - 1
+    -- Layout alignment engine (Right-to-Left)
+    local cur_x = bar_x + bar_w - 20
 
-    ui.draw_text(stats, text_x, text_y, 12, 0.75, 0.75, 0.85, 0.90, FONT)
+    -- 1. Draw Time block
+    local time_w = ui.measure_text(time_str, 12, FONT)
+    cur_x = cur_x - time_w
+    ui.draw_text(time_str, cur_x, text_y, 12, 0.85, 0.85, 0.95, 0.90, FONT)
+    cur_x = cur_x - icon_w - 4
+    ui.draw_text("\u{E121}", cur_x, text_y + 1, 11, 0.7, 0.4, 1.0, 0.90, ICON_FONT)
+
+    -- 2. Draw RAM block
+    local ram_w = ui.measure_text(ram_str, 12, FONT)
+    cur_x = cur_x - spacing - ram_w
+    ui.draw_text(ram_str, cur_x, text_y, 12, 0.85, 0.85, 0.95, 0.90, FONT)
+    cur_x = cur_x - icon_w - 4
+    ui.draw_text("\u{E9A1}", cur_x, text_y + 1, 11, 0.7, 0.4, 1.0, 0.90, ICON_FONT)
+
+    -- 3. Draw CPU block
+    local cpu_w = ui.measure_text(cpu_str, 12, FONT)
+    cur_x = cur_x - spacing - cpu_w
+    ui.draw_text(cpu_str, cur_x, text_y, 12, 0.85, 0.85, 0.95, 0.90, FONT)
+    cur_x = cur_x - icon_w - 4
+    ui.draw_text("\u{E9D9}", cur_x, text_y + 1, 11, 0.7, 0.4, 1.0, 0.90, ICON_FONT)
 
     -- Focused window title (center)
     if HyprWin.focused_window then
