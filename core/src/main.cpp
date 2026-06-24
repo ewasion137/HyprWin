@@ -214,7 +214,7 @@ int main() {
 
     // Open standard libraries safely (including OS library for clocks/timers)
     lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string,
-                       sol::lib::math, sol::lib::table, sol::lib::os);
+                       sol::lib::math, sol::lib::table, sol::lib::os, sol::lib::io);
 
     // Bind a C++ function to Lua
     lua.set_function("log", [](std::string message) {
