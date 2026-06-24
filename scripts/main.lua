@@ -91,39 +91,21 @@ HyprWin.retile = function()
             local is_active_ws = (ws == HyprWin.current_workspace)
 
             if is_active_ws or is_sticky then
-                -- Only tile if the window is NOT minimized
+                -- Uncloak active window immediately
+                wm.set_cloaked(hwnd, false)
+
                 if not wm.is_minimized(hwnd) then
-                    -- Identify if any active window on this workspace is set to fullscreen (respecting topbar)
                     if HyprWin.fullscreen_windows[hwnd] then
                         fullscreen_hwnd = hwnd
                     end
 
                     if not HyprWin.floating_windows[hwnd] then
                         table.insert(active_workspace_windows, hwnd)
-                    else
-                        -- Restore floating or sticky window safely
-                        local x, y, _, _ = wm.get_window_rect(hwnd)
-                        if x < -10000 or y < -10000 then
-                            local saved_rect = HyprWin.floating_rects[hwnd]
-                            if saved_rect then
-                                wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
-                            else
-                                -- Fallback center position
-                                wm.move_window(hwnd, 150, 150, 1280, 720)
-                            end
-                        end
                     end
                 end
             else
-                -- Save floating window layout before stashing it off-screen
-                if HyprWin.floating_windows[hwnd] then
-                    local x, y, w, h = wm.get_window_rect(hwnd)
-                    if x >= -10000 and y >= -10000 then
-                        HyprWin.floating_rects[hwnd] = { x, y, w, h }
-                    end
-                end
-                -- Move off-screen to hide from view without minimizing
-                wm.move_window(hwnd, -32000, -32000, 800, 600)
+                -- Cloak window to hide it natively
+                wm.set_cloaked(hwnd, true)
             end
         end
 
