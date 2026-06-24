@@ -11,14 +11,14 @@
 #include <iostream>
 #include <string>
 #include <windows.h>
+#include <filesystem>
+#include <fstream>
+#include <shlobj.h>
 
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-#include <filesystem>
-#include <fstream>
-#include <shlobj.h>
 }
 
 #include <sol/sol.hpp> // Move this ABOVE the global pointer and callback
@@ -304,16 +304,18 @@ int main() {
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
     });
 
-    wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
-                                      double h) {
+    wm.set_function("move_window", [](size_t hwnd, double x, double y, double w, double h) {
       HWND handle = (HWND)hwnd;
-      RECT windowRect;
-      if (IsZoomed(handle)) {
-        ShowWindow(handle, SW_RESTORE);
-      }
-      GetWindowRect(handle, &windowRect);
+      if (IsZoomed(handle)) ShowWindow(handle, SW_RESTORE);
 
-      RECT frameRect;
+      // --- FIX: Skip DWM adjustment for stashed windows to prevent 100x1 size bug ---
+      if (x < -10000 || y < -10000) {
+          SetWindowPos(handle, HWND_NOTOPMOST, (int)x, (int)y, (int)w, (int)h,
+                       SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
+          return;
+      }
+
+      RECT windowRect;
       if (SUCCEEDED(DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS,
                                           &frameRect, sizeof(RECT)))) {
         int leftMargin = frameRect.left - windowRect.left;
