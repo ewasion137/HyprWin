@@ -93,21 +93,11 @@ bool IsToplevelWindow(HWND hwnd) {
 }
 
 void RestoreAllWindows() {
-  static int offset = 0;
   EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-    if (IsWindowVisible(hwnd)) {
-      RECT rc;
-      GetWindowRect(hwnd, &rc);
-      // Check if window is located in stashed workspace coordinates
-      if (rc.left < -10000 || rc.top < -10000) {
-        int* off = (int*)lParam;
-        SetWindowPos(hwnd, HWND_NOTOPMOST, 100 + *off, 100 + *off, 1280, 720, 
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
-        *off = (*off + 30) % 200; // Cascade on restore
-      }
-    }
+    BOOL fCloak = FALSE;
+    DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &fCloak, sizeof(fCloak));
     return TRUE;
-  }, (LPARAM)&offset);
+  }, 0);
 }
 
 BOOL WINAPI ConsoleHandler(DWORD ctrlType) {
@@ -301,7 +291,7 @@ int main() {
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       }
     });
-
+    
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
                             GetSystemMetrics(SM_CYSCREEN));
@@ -330,6 +320,10 @@ int main() {
         return false;
       }
       return true;
+    });
+    wm.set_function("set_cloaked", [](size_t hwnd, bool cloaked) {
+      BOOL fCloak = cloaked ? TRUE : FALSE;
+      DwmSetWindowAttribute((HWND)hwnd, DWMWA_CLOAK, &fCloak, sizeof(fCloak));
     });
 
     wm.set_function("is_minimized",
