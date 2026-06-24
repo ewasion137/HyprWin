@@ -14,6 +14,7 @@ HyprWin.window_rects = {} -- Tracks current coordinates {x, y, w, h}
 HyprWin.focused_window_title = ""
 HyprWin.system_stats = { cpu = 0, ram = 0, last_update = 0 }
 HyprWin.anim_speed = 0.15
+HyprWin.workspace_roots = {}
 local is_retiling = false
 
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
@@ -53,6 +54,112 @@ local function should_ignore(hwnd, title, class)
         if title:find(pattern) then return true end
     end
     return false
+end
+
+local function find_node(node, hwnd)
+    if not node then return nil end
+    if node.type == "leaf" and node.hwnd == hwnd then return node end
+    if node.type == "split" then
+        local found = find_node(node.children[1], hwnd)
+        if found then return found end
+        return find_node(node.children[2], hwnd)
+    end
+    return nil
+end
+
+local function bsp_insert(ws_id, hwnd, focused_hwnd)
+    local root = HyprWin.workspace_roots[ws_id]
+    local new_leaf = { type = "leaf", hwnd = hwnd, parent = nil }
+
+    if not root then
+        HyprWin.workspace_roots[ws_id] = new_leaf
+        return
+    end
+
+    local target = focused_hwnd and find_node(root, focused_hwnd) or nil
+    if not target then
+        target = root
+        while target.type == "split" do
+            target = target.children[1]
+        end
+    end
+
+    local parent = target.parent
+    local split_node = {
+        type = "split",
+        direction = "h",
+        ratio = 0.5,
+        parent = parent,
+        children = {}
+    }
+
+    local rect = HyprWin.window_rects[target.hwnd]
+    if not rect then
+        -- Safe system fallback during initialization
+        local x, y, w, h = wm.get_window_rect(target.hwnd)
+        rect = { x, y, w, h }
+    end
+
+    if rect then
+        split_node.direction = (rect[3] > rect[4]) and "h" or "v"
+    end
+
+    if not parent then
+        HyprWin.workspace_roots[ws_id] = split_node
+    else
+        if parent.children[1] == target then
+            parent.children[1] = split_node
+        else
+            parent.children[2] = split_node
+        end
+    end
+
+    target.parent = split_node
+    new_leaf.parent = split_node
+    split_node.children[1] = target
+    split_node.children[2] = new_leaf
+end
+
+local function bsp_remove(ws_id, hwnd)
+    local root = HyprWin.workspace_roots[ws_id]
+    if not root then return end
+
+    local target = find_node(root, hwnd)
+    if not target then return end
+
+    local parent = target.parent
+    if not parent then
+        HyprWin.workspace_roots[ws_id] = nil
+        return
+    end
+
+    local sibling = (parent.children[1] == target) and parent.children[2] or parent.children[1]
+    local grandparent = parent.parent
+
+    sibling.parent = grandparent
+
+    if not grandparent then
+        HyprWin.workspace_roots[ws_id] = sibling
+    else
+        if grandparent.children[1] == parent then
+            grandparent.children[1] = sibling
+        else
+            grandparent.children[2] = sibling
+        end
+    end
+end
+
+local function bsp_adjust_ratio(hwnd, delta)
+    local ws_id = HyprWin.current_workspace
+    local root = HyprWin.workspace_roots[ws_id]
+    if not root then return end
+
+    local node = find_node(root, hwnd)
+    if node and node.parent then
+        local parent = node.parent
+        parent.ratio = math.max(0.15, math.min(0.85, parent.ratio + delta))
+        HyprWin.retile()
+    end
 end
 
 HyprWin.retile = function()
@@ -116,56 +223,46 @@ HyprWin.retile = function()
         local gap = 15
         local bar_h = 35
         
-        -- Correct work area
         local tx, ty = gap, bar_h + gap
         local tw, th = sw - (gap * 2), sh - bar_h - (gap * 2)
 
         -- Handle Monocle Fullscreen (respecting topbar)
         if fullscreen_hwnd then
-            for _, hwnd in ipairs(active_workspace_windows) do
-                if hwnd == fullscreen_hwnd then
-                    wm.move_window(hwnd, tx, ty, tw, th)
-                else
-                    wm.move_window(hwnd, -32000, -32000, 800, 600)
-                end
-            end
+            wm.move_window(fullscreen_hwnd, tx, ty, tw, th)
+            HyprWin.window_rects[fullscreen_hwnd] = { tx, ty, tw, th }
             return
         end
 
-        local n = #active_workspace_windows
-        if n == 0 then return end
-
-        local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
-
-        -- Recursive BSP splitting with depth tracking
-        local function recursive_tile(x, y, w, h, first, last, depth)
-            depth = depth or 0
-            if first == last then
-                wm.move_window(active_workspace_windows[first], x, y, w, h)
+        -- Layout recursive BSP tree
+        local function layout_node(node, x, y, w, h)
+            if not node then return end
+            if node.type == "leaf" then
+                wm.move_window(node.hwnd, x, y, w, h)
+                HyprWin.window_rects[node.hwnd] = { x, y, w, h } -- Update cache
                 return
             end
 
-            local mid = math.floor((first + last) / 2)
-
-            -- Apply adjustable ratio only to the main split (depth 0), others are balanced
-            local ratio = (depth == 0) and current_ratio or 0.5
-
-            -- Choose split axis based on aspect ratio
-            if w > h then
-                -- Split vertically (left and right)
-                local w1 = math.floor((w - gap) * ratio)
-                recursive_tile(x, y, w1, h, first, mid, depth + 1)
-                recursive_tile(x + w1 + gap, y, w - w1 - gap, h, mid + 1, last, depth + 1)
+            if node.direction == "h" then
+                local w1 = math.floor((w - gap) * node.ratio)
+                layout_node(node.children[1], x, y, w1, h)
+                layout_node(node.children[2], x + w1 + gap, y, w - w1 - gap, h)
             else
-                -- Split horizontally (top and bottom)
-                local h1 = math.floor((h - gap) * ratio)
-                recursive_tile(x, y, w, h1, first, mid, depth + 1)
-                recursive_tile(x, y + h1 + gap, w, h - h1 - gap, mid + 1, last, depth + 1)
+                local h1 = math.floor((h - gap) * node.ratio)
+                layout_node(node.children[1], x, y, w, h1)
+                layout_node(node.children[2], x, y + h1 + gap, w, h - h1 - gap)
             end
         end
 
-        recursive_tile(tx, ty, tw, th, 1, n, 0)
-    end)
+        local root = HyprWin.workspace_roots[HyprWin.current_workspace]
+        layout_node(root, tx, ty, tw, th)
+
+        if HyprWin.layout_mode == "bsp" then
+            local root = HyprWin.workspace_roots[HyprWin.current_workspace]
+            layout_node(root, tx, ty, tw, th)
+        elseif HyprWin.layout_mode == "master" then
+            get_master_tiles(tx, ty, tw, th, active_workspace_windows)
+        end
+    end) -- End
 
     -- Unlock retiling state and report any internal math errors safely
     is_retiling = false
@@ -197,11 +294,13 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     end
     
 
-    -- 0x8002: Show, 0x0017: Restore
+     -- 0x8002: Show, 0x0017: Restore
     if event_type == 0x8002 or event_type == 0x0017 then
         if not is_tracked(hwnd) then
             table.insert(HyprWin.windows, hwnd)
-            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+            local ws = HyprWin.current_workspace
+            HyprWin.window_workspaces[hwnd] = ws
+            bsp_insert(ws, hwnd, HyprWin.focused_window)
         end
         HyprWin.retile()
     end
@@ -211,7 +310,8 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         local idx = is_tracked(hwnd)
         if idx then
             table.remove(HyprWin.windows, idx)
-            log("Untracked window: " .. hwnd .. " | Remaining: " .. #HyprWin.windows)
+            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+            bsp_remove(ws, hwnd)
             if HyprWin.focused_window == hwnd then
                 HyprWin.focused_window = nil
             end
@@ -287,7 +387,8 @@ for _, hwnd in ipairs(existing) do
     local class = wm.get_class_name(hwnd)
     if not should_ignore(hwnd, title, class) then
         table.insert(filtered, hwnd)
-        HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace -- Safe initialization
+        HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+        bsp_insert(HyprWin.current_workspace, hwnd, nil)
     end
 end
 
@@ -296,7 +397,8 @@ local function find_neighbor(dir)
     local focused = HyprWin.focused_window
     if not focused then return nil end
 
-    local fx, fy, fw, fh = wm.get_window_rect(focused)
+    local f_rect = HyprWin.window_rects[focused] or { wm.get_window_rect(focused) }
+    local fx, fy, fw, fh = f_rect[1], f_rect[2], f_rect[3], f_rect[4]
     local fcx = fx + fw / 2
     local fcy = fy + fh / 2
 
@@ -307,7 +409,8 @@ local function find_neighbor(dir)
         if hwnd ~= focused and not HyprWin.floating_windows[hwnd] then
             local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
             if ws == HyprWin.current_workspace then
-                local x, y, w, h = wm.get_window_rect(hwnd)
+                local rect = HyprWin.window_rects[hwnd] or { wm.get_window_rect(hwnd) }
+                local x, y, w, h = rect[1], rect[2], rect[3], rect[4]
                 local cx = x + w / 2
                 local cy = y + h / 2
 
@@ -456,17 +559,13 @@ HyprWin.on_hotkey = function(id)
         swap_direction("right")
     elseif id == 601 or id == 603 then
         -- Smart Resize Shrink (Ctrl + Alt + H/J)
-        local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
-        if ratio > 0.15 then
-            HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio - 0.05
-            HyprWin.retile()
+        if HyprWin.focused_window then
+            bsp_adjust_ratio(HyprWin.focused_window, -0.05)
         end
     elseif id == 602 or id == 604 then
         -- Smart Resize Grow (Ctrl + Alt + L/K)
-        local ratio = HyprWin.workspace_ratios[HyprWin.current_workspace] or 0.5
-        if ratio < 0.85 then
-            HyprWin.workspace_ratios[HyprWin.current_workspace] = ratio + 0.05
-            HyprWin.retile()
+        if HyprWin.focused_window then
+            bsp_adjust_ratio(HyprWin.focused_window, 0.05)
         end
     end
 end
