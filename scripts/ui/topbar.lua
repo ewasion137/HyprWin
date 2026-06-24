@@ -60,15 +60,9 @@ function topbar.draw(anim_y)
         end
     end
 
-    local now = os.clock()
-    if now - HyprWin.system_stats.last_update > 1.0 then
-        HyprWin.system_stats.cpu = math.floor(wm.get_cpu_usage())
-        HyprWin.system_stats.ram = math.floor(wm.get_ram_usage())
-        HyprWin.system_stats.last_update = now
-    end
-
-    local cpu      = HyprWin.system_stats.cpu
-    local ram      = HyprWin.system_stats.ram
+    -- Dynamic Right-side system stats layout (Clock, Memory, CPU)
+    local cpu      = math.floor(wm.get_cpu_usage())
+    local ram      = math.floor(wm.get_ram_usage())
     local time_str = get_time_string()
     local ram_str  = string.format("%d%%", ram)
     local cpu_str  = string.format("%d%%", cpu)
@@ -102,8 +96,8 @@ function topbar.draw(anim_y)
     ui.draw_text("\u{E9D9}", cur_x, text_y + 1, 11, 0.7, 0.4, 1.0, 0.90, ICON_FONT)
 
     -- Focused window title (center)
-    if HyprWin.focused_window and HyprWin.focused_window_title ~= "" then
-        local title   = HyprWin.focused_window_title
+    if HyprWin.focused_window then
+        local title   = wm.get_window_title(HyprWin.focused_window)
         local title_w = ui.measure_text(title, 12, FONT)
         local title_x = bar_x + (bar_w - title_w) / 2
         ui.draw_text(title, title_x, text_y, 12, 0.85, 0.85, 0.95, 0.80, FONT)

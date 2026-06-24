@@ -16,6 +16,9 @@ extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+#include <filesystem>
+#include <fstream>
+#include <shlobj.h>
 }
 
 #include <sol/sol.hpp> // Move this ABOVE the global pointer and callback
@@ -24,6 +27,7 @@ extern "C" {
 sol::state *g_lua = nullptr;
 Renderer g_renderer;
 HWND g_overlay_hwnd = NULL;
+namespace fs = std::filesystem;
 
 static FILETIME g_prev_idle_time = {0};
 static FILETIME g_prev_kernel_time = {0};
@@ -93,11 +97,21 @@ bool IsToplevelWindow(HWND hwnd) {
 }
 
 void RestoreAllWindows() {
+  static int offset = 0;
   EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-    BOOL fCloak = FALSE;
-    DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &fCloak, sizeof(fCloak));
+    if (IsWindowVisible(hwnd)) {
+      RECT rc;
+      GetWindowRect(hwnd, &rc);
+      // Check if window is located in stashed workspace coordinates
+      if (rc.left < -10000 || rc.top < -10000) {
+        int* off = (int*)lParam;
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 100 + *off, 100 + *off, 1280, 720, 
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+        *off = (*off + 30) % 200; // Cascade on restore
+      }
+    }
     return TRUE;
-  }, 0);
+  }, (LPARAM)&offset);
 }
 
 BOOL WINAPI ConsoleHandler(DWORD ctrlType) {
@@ -291,7 +305,7 @@ int main() {
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       }
     });
-    
+
     wm.set_function("get_screen_size", []() {
       return std::make_pair(GetSystemMetrics(SM_CXSCREEN),
                             GetSystemMetrics(SM_CYSCREEN));
@@ -320,10 +334,6 @@ int main() {
         return false;
       }
       return true;
-    });
-    wm.set_function("set_cloaked", [](size_t hwnd, bool cloaked) {
-      BOOL fCloak = cloaked ? TRUE : FALSE;
-      DwmSetWindowAttribute((HWND)hwnd, DWMWA_CLOAK, &fCloak, sizeof(fCloak));
     });
 
     wm.set_function("is_minimized",
@@ -535,22 +545,6 @@ int main() {
               if (!result.valid()) {
                 sol::error err = result;
                 std::cerr << "!!! LUA HOTKEY ERROR: " << err.what() << std::endl;
-              }
-            }
-          }
-        }
-        if (msg.message == WM_HYPRWIN_ALTTAB) {
-          if (g_lua) {
-            sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
-            if (alttab_func.valid()) {
-              const char* action = "next";
-              if (msg.wParam == 2) action = "prev";
-              else if (msg.wParam == 3) action = "commit";
-
-              auto result = alttab_func(action);
-              if (!result.valid()) {
-                sol::error err = result;
-                std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
               }
             }
           }
