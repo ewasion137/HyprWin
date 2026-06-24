@@ -13,6 +13,34 @@ HyprWin.layout_mode = "bsp"
 HyprWin.anim_speed = 0.15
 local is_retiling = false
 
+function string.trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
+local function load_config()
+    local path = wm.get_config_path()
+    local file = io.open(path, "r")
+    if not file then return end
+
+    local settings = {}
+    for line in file:lines() do
+        -- Ignore comments and empty lines
+        if not line:match("^%s*#") and not line:match("^%s*$") then
+            local key, value = line:match("([^=]+)=([^=]+)")
+            if key and value then
+                settings[key:trim()] = value:trim()
+            end
+        end
+    end
+    file:close()
+    return settings
+end
+
+local cfg = load_config() or {}
+HyprWin.gaps_out = tonumber(cfg.gaps_out) or 15
+HyprWin.layout_mode = cfg.layout_mode or "bsp"
+HyprWin.anim_speed = tonumber(cfg.animation_speed) or 0.15
+
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
 
 local topbar = require("topbar")
