@@ -174,11 +174,41 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
   }
 }
 
+std::string GetConfigPath() {
+    char szPath[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, szPath))) {
+        fs::path configDir = fs::path(szPath) / ".hyprwin";
+        if (!fs::exists(configDir)) {
+            fs::create_directory(configDir);
+        }
+        return (configDir / "config.conf").string();
+    }
+    return "config.conf"; // Fallback to local
+}
+
+void EnsureDefaultConfig(const std::string& path) {
+    if (!fs::exists(path)) {
+        std::ofstream outFile(path);
+        outFile << "# HyprWin Configuration" << std::endl;
+        outFile << "gaps_in=5" << std::endl;
+        outFile << "gaps_out=15" << std::endl;
+        outFile << "border_size=2" << std::endl;
+        outFile << "active_border_color=0xff7040ff" << std::endl;
+        outFile << "inactive_border_color=0xff252535" << std::endl;
+        outFile << "layout_mode=bsp" << std::endl;
+        outFile << "animation_speed=0.15" << std::endl;
+        outFile.close();
+    }
+}
+
 int main() {
   // Wrap everything in a try-catch to catch sol2 exceptions
   try {
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
     std::cout << "HyprWin: Initializing Lua engine..." << std::endl;
+    std::string configPath = GetConfigPath();
+    EnsureDefaultConfig(configPath);
+
     sol::state lua;
     g_lua = &lua;
 
@@ -355,6 +385,10 @@ int main() {
           },
           (LPARAM)&hwnds);
       return hwnds;
+    });
+
+    wm.set_function("get_config_path", [configPath]() {
+        return configPath;
     });
     auto ui = lua.create_named_table("ui");
 
