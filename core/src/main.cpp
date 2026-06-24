@@ -539,6 +539,22 @@ int main() {
             }
           }
         }
+        if (msg.message == WM_HYPRWIN_ALTTAB) {
+          if (g_lua) {
+            sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
+            if (alttab_func.valid()) {
+              const char* action = "next";
+              if (msg.wParam == 2) action = "prev";
+              else if (msg.wParam == 3) action = "commit";
+
+              auto result = alttab_func(action);
+              if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
+              }
+            }
+          }
+        }
 
         TranslateMessage(&msg);
         DispatchMessage(&msg);
