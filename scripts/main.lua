@@ -10,6 +10,9 @@ HyprWin.sticky_windows = {}    -- Tracks pinned/sticky state (visible on all wor
 HyprWin.fullscreen_windows = {} -- Tracks monocle-fullscreen state for each hwnd (boolean)
 HyprWin.workspace_ratios = {}  -- Stores split ratio (0.1 - 0.9) for each workspace
 HyprWin.layout_mode = "bsp"
+HyprWin.window_rects = {} -- Tracks current coordinates {x, y, w, h}
+HyprWin.focused_window_title = ""
+HyprWin.system_stats = { cpu = 0, ram = 0, last_update = 0 }
 HyprWin.anim_speed = 0.15
 local is_retiling = false
 
@@ -178,7 +181,7 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
     -- 0x0003: Focus changed
     if event_type == 0x0003 then
         HyprWin.focused_window = hwnd
-        -- Catch window on focus if we missed its show event
+        HyprWin.focused_window_title = title -- Update cache
         if not is_tracked(hwnd) and is_valid(hwnd) then
             table.insert(HyprWin.windows, hwnd)
             HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
@@ -186,6 +189,13 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
         end
         return
     end
+
+    -- 0x800C: Name change
+    if event_type == 0x800C and hwnd == HyprWin.focused_window then
+        HyprWin.focused_window_title = title -- Update cache
+        return
+    end
+    
 
     -- 0x8002: Show, 0x0017: Restore
     if event_type == 0x8002 or event_type == 0x0017 then
@@ -254,12 +264,12 @@ HyprWin.on_render = function()
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
         if ws == HyprWin.current_workspace and not wm.is_minimized(hwnd) then
-            local x, y, w, h = wm.get_window_rect(hwnd)
-            if hwnd == HyprWin.focused_window then
-                -- Multi-layered neon glow
+            local rect = HyprWin.window_rects[hwnd]
+            if rect and hwnd == HyprWin.focused_window then
+                local x, y, w, h = rect[1], rect[2], rect[3], rect[4]
                 local glow = 0.1 * math.sin(time * 5)
-                ui.draw_rounded_rect(x-3, y-3, w+6, h+6, 12, 0.5, 0.3, 1.0, 0.2 + glow, 8) -- Outer glow
-                ui.draw_rounded_rect(x, y, w, h, 8, 0.6, 0.4, 1.0, 1.0, 2.5) -- Sharp border
+                ui.draw_rounded_rect(x-3, y-3, w+6, h+6, 12, 0.5, 0.3, 1.0, 0.2 + glow, 8)
+                ui.draw_rounded_rect(x, y, w, h, 8, 0.6, 0.4, 1.0, 1.0, 2.5)
             end
         end
     end
