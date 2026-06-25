@@ -22,7 +22,7 @@ HyprWin.theme = {
     font_family = "Segoe UI Variable",
     icon_font_family = "Segoe MDL2 Assets",
     
-    -- Color channels: {R, G, B, A}
+    -- Design tokens (Default Fallbacks)
     bg_color = { 0.02, 0.02, 0.03, 0.90 },
     border_color = { 0.15, 0.15, 0.18, 0.60 },
     active_border_color = { 0.70, 0.40, 1.00, 1.00 },
@@ -37,104 +37,37 @@ HyprWin.theme = {
 
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
 
+-- Dynamic path mapping for multi-file user configs
+local user_path = wm.get_config_path()
+local user_dir = user_path:match("(.*[/\\])")
+if user_dir then
+    package.path = package.path .. ";" .. user_dir .. "?.lua;" .. user_dir .. "?/init.lua"
+end
+
 local topbar = require("topbar")
 local alttab = require("alttab")
 local launcher = require("launcher")
 local hl_shim = require("hl_shim")
 
-local config_path = wm.get_config_path()
-local success, err = pcall(dofile, config_path)
+-- Run the user's entry point config file
+local success, err = pcall(dofile, user_path)
 if not success then
     log("CONFIG ERROR: " .. tostring(err))
-end
-
--- Parser for 0xff7040ff / 0x7040ff hex colors
-local function parse_hex_color(hex)
-    if not hex then return nil end
-    hex = hex:gsub("^0x", ""):gsub("^#", "")
-    if #hex == 6 then
-        local r = tonumber(hex:sub(1, 2), 16) / 255
-        local g = tonumber(hex:sub(3, 4), 16) / 255
-        local b = tonumber(hex:sub(5, 6), 16) / 255
-        return { r, g, b, 1.0 }
-    elseif #hex == 8 then
-        local a = tonumber(hex:sub(1, 2), 16) / 255
-        local r = tonumber(hex:sub(3, 4), 16) / 255
-        local g = tonumber(hex:sub(5, 6), 16) / 255
-        local b = tonumber(hex:sub(7, 8), 16) / 255
-        return { r, g, b, a }
-    end
-    return nil
 end
 
 function string.trim(s)
     return s:match("^%s*(.-)%s*$")
 end
 
-local function load_config()
-    local path = wm.get_config_path()
-    local file = io.open(path, "r")
-    if not file then return {} end
-
-    local settings = {}
-    for line in file:lines() do
-        if not line:match("^%s*#") and not line:match("^%s*$") then
-            local key, value = line:match("([^=]+)=([^=]+)")
-            if key and value then
-                settings[key:trim()] = value:trim()
-            end
-        end
-    end
-    file:close()
-    return settings
-end
-
--- Apply parsed config directly to design tokens
-local cfg = load_config()
-local t = HyprWin.theme
-t.gaps_in = tonumber(cfg.gaps_in) or t.gaps_in
-t.gaps_out = tonumber(cfg.gaps_out) or t.gaps_out
-t.border_size = tonumber(cfg.border_size) or t.border_size
-t.rounding = tonumber(cfg.rounding) or t.rounding
-
-local act_col = parse_hex_color(cfg.active_border_color)
-if act_col then t.active_border_color = act_col; t.accent_color = act_col end
-local inact_col = parse_hex_color(cfg.inactive_border_color)
-if inact_col then t.border_color = inact_col end
-
-HyprWin.layout_mode = cfg.layout_mode or "bsp"
-HyprWin.anim_speed = tonumber(cfg.animation_speed) or 0.15
-
 local function is_valid(hwnd)
     return wm.is_window_visible(hwnd)
 end
-
-local window_rules = {
-    float = { "Telegram", "Picture-in-picture", "Calculator", "Картинка в картинке" },
-    ignore_classes = { 
-        "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow", 
-        "DesktopWindowXamlSource", "MSCTFIME UI", "IME", "CicMarshalWnd",
-        "TaskManagerWindow"
-    }
-}
 
 local function is_tracked(hwnd)
     for i, w in ipairs(HyprWin.windows) do
         if w == hwnd then return i end
     end
     return nil
-end
-
-local function should_ignore(hwnd, title, class)
-    title = title or ""
-    class = class or ""
-    for _, pattern in ipairs(window_rules.ignore_classes) do
-        if class:find(pattern) then return true end
-    end
-    for _, pattern in ipairs(window_rules.float) do
-        if title:find(pattern) then return true end
-    end
-    return false
 end
 
 HyprWin.retile = function()
@@ -200,7 +133,8 @@ HyprWin.retile = function()
         end
 
         local sw, sh = wm.get_screen_size()
-        local bar_h = HyprWin.theme.bar_height + 5
+        local t = HyprWin.theme
+        local bar_h = t.bar_height + 5
         
         local tx, ty = t.gaps_out, bar_h + t.gaps_out
         local tw, th = sw - (t.gaps_out * 2), sh - bar_h - (t.gaps_out * 2)
@@ -245,7 +179,18 @@ HyprWin.retile = function()
         if HyprWin.layout_mode == "bsp" then
             recursive_tile(tx, ty, tw, th, 1, n, 0)
         elseif HyprWin.layout_mode == "master" then
-            -- Master-stack implementation fallback (not used globally in BSP default)
+            -- Master-stack layout fallback
+            local ratio = current_ratio or 0.5
+            local mw = math.floor(tw * ratio)
+            if n == 1 then
+                wm.move_window(active_workspace_windows[1], tx, ty, tw, th)
+            else
+                wm.move_window(active_workspace_windows[1], tx, ty, mw - t.gaps_in, th)
+                local sh_item = math.floor((th - (t.gaps_in * (n - 2))) / (n - 1))
+                for i = 2, n do
+                    wm.move_window(active_workspace_windows[i], tx + mw, ty + (i - 2) * (sh_item + t.gaps_in), tw - mw, sh_item)
+                end
+            end
         end
     end)
 
@@ -304,6 +249,7 @@ end
 
 HyprWin.on_render = function()
     local time = os.clock()
+    local t = HyprWin.theme
     
     HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
     HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
@@ -339,7 +285,7 @@ for _, hwnd in ipairs(existing) do
     end
 end
 
-local function find_neighbor(dir)
+function find_neighbor(dir)
     local focused = HyprWin.focused_window
     if not focused then return nil end
 
@@ -377,12 +323,12 @@ local function find_neighbor(dir)
     return best_hwnd
 end
 
-local function focus_direction(dir)
+function focus_direction(dir)
     local target = find_neighbor(dir)
     if target then wm.focus_window(target) end
 end
 
-local function swap_direction(dir)
+function swap_direction(dir)
     local focused = HyprWin.focused_window
     local target  = find_neighbor(dir)
     if not focused or not target then return end
@@ -399,6 +345,7 @@ local function swap_direction(dir)
     end
 end
 
+-- Fallback hotkey registration for legacy hardcoded bindings
 HyprWin.on_hotkey = function(id)
     if id >= 101 and id <= 109 then
         local target_ws = id - 100
