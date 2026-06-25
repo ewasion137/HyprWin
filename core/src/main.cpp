@@ -182,9 +182,9 @@ std::string GetConfigPath() {
         if (!fs::exists(configDir)) {
             fs::create_directory(configDir);
         }
-        return (configDir / "config.lua").string(); // Now returns config.lua
+        return (configDir / "hyprland.lua").string(); // Now returns hyprland.lua
     }
-    return "config.lua";
+    return "hyprland.lua";
 }
 
 void EnsureDefaultConfig(const std::string& path) {
