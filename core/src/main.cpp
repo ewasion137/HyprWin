@@ -310,6 +310,7 @@ int main() {
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
     });
 
+    // --- LOCATE: core/src/main.cpp -> move_window ---
     wm.set_function("move_window", [](size_t hwnd, double x, double y, double w,
                                       double h) {
       HWND handle = (HWND)hwnd;
@@ -320,7 +321,9 @@ int main() {
       GetWindowRect(handle, &windowRect);
 
       RECT frameRect;
-      if (SUCCEEDED(DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS,
+      // Skip DWM margins calculation for stashed (off-screen) windows to prevent 100x1 size underflow
+      bool is_stashed = (x < -10000 || y < -10000);
+      if (!is_stashed && SUCCEEDED(DwmGetWindowAttribute(handle, DWMWA_EXTENDED_FRAME_BOUNDS,
                                           &frameRect, sizeof(RECT)))) {
         int leftMargin = frameRect.left - windowRect.left;
         int topMargin = frameRect.top - windowRect.top;
@@ -332,11 +335,9 @@ int main() {
         int finalW = (int)w + leftMargin + rightMargin;
         int finalH = (int)h + topMargin + bottomMargin;
 
-        // Use SWP_NOACTIVATE and SWP_NOSENDCHANGING to optimize drawing
         SetWindowPos(handle, HWND_NOTOPMOST, finalX, finalY, finalW, finalH,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       } else {
-        // Fallback to normal SetWindowPos if DWM bounds are unavailable
         SetWindowPos(handle, HWND_NOTOPMOST, (int)x, (int)y, (int)w, (int)h,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
       }
