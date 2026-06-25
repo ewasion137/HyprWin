@@ -63,7 +63,7 @@ function alttab.draw()
     local modal_x = (sw - modal_w) / 2
     local modal_y = (sh - modal_h) / 2
 
-    -- Modal card background and active border
+    -- Fully bound to Design Tokens
     ui.fill_rounded_rect(modal_x, modal_y, modal_w, modal_h, t.rounding + 4, t.bg_color[1], t.bg_color[2], t.bg_color[3], t.bg_color[4])
     ui.draw_rounded_rect(modal_x, modal_y, modal_w, modal_h, t.rounding + 4, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], t.active_border_color[4], t.border_size)
 
@@ -75,10 +75,9 @@ function alttab.draw()
         local item_y = modal_y + padding
         local is_selected = (i == HyprWin.alttab_index)
 
-        -- Window item styling
         if is_selected then
             ui.fill_rounded_rect(item_x, item_y, item_w, item_h, t.rounding, t.border_color[1], t.border_color[2], t.border_color[3], 0.95)
-            ui.draw_rounded_rect(item_x, item_y, item_w, item_h, t.rounding, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], 1.0, 1.5)
+            ui.draw_rounded_rect(item_x, item_y, item_w, item_h, t.rounding, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], 1.0, t.border_size)
         else
             ui.fill_rounded_rect(item_x, item_y, item_w, item_h, t.rounding, t.bg_color[1], t.bg_color[2], t.bg_color[3], 0.5)
             ui.draw_rounded_rect(item_x, item_y, item_w, item_h, t.rounding, t.border_color[1], t.border_color[2], t.border_color[3], 0.6, 1.0)
