@@ -55,6 +55,7 @@ function launcher.draw(alpha)
     local panel_x = (sw - panel_w) / 2
     local panel_y = (sh - panel_h) / 2 - (18 * (1 - alpha))
 
+    -- Design Tokens Alignment
     ui.fill_rounded_rect(panel_x, panel_y, panel_w, panel_h, t.rounding + 6, t.bg_color[1], t.bg_color[2], t.bg_color[3], t.bg_color[4] * alpha)
     ui.draw_rounded_rect(panel_x, panel_y, panel_w, panel_h, t.rounding + 6, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], t.active_border_color[4] * 0.50 * alpha, t.border_size)
 
