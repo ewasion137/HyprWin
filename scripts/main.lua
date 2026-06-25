@@ -40,6 +40,13 @@ package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/
 local topbar = require("topbar")
 local alttab = require("alttab")
 local launcher = require("launcher")
+local hl_shim = require("hl_shim")
+
+local config_path = wm.get_config_path()
+local success, err = pcall(dofile, config_path)
+if not success then
+    log("CONFIG ERROR: " .. tostring(err))
+end
 
 -- Parser for 0xff7040ff / 0x7040ff hex colors
 local function parse_hex_color(hex)

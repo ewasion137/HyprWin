@@ -28,6 +28,7 @@ sol::state *g_lua = nullptr;
 Renderer g_renderer;
 HWND g_overlay_hwnd = NULL;
 namespace fs = std::filesystem;
+std::vector<int> g_registered_hotkeys;
 
 static FILETIME g_prev_idle_time = {0};
 static FILETIME g_prev_kernel_time = {0};
@@ -181,22 +182,15 @@ std::string GetConfigPath() {
         if (!fs::exists(configDir)) {
             fs::create_directory(configDir);
         }
-        return (configDir / "config.conf").string();
+        return (configDir / "config.lua").string(); // Now returns config.lua
     }
-    return "config.conf"; // Fallback to local
+    return "config.lua";
 }
 
 void EnsureDefaultConfig(const std::string& path) {
     if (!fs::exists(path)) {
         std::ofstream outFile(path);
-        outFile << "# HyprWin Configuration" << std::endl;
-        outFile << "gaps_in=5" << std::endl;
-        outFile << "gaps_out=15" << std::endl;
-        outFile << "border_size=2" << std::endl;
-        outFile << "active_border_color=0xff7040ff" << std::endl;
-        outFile << "inactive_border_color=0xff252535" << std::endl;
-        outFile << "layout_mode=bsp" << std::endl;
-        outFile << "animation_speed=0.15" << std::endl;
+        outFile << "-- HyprWin User Configuration" << std::endl; // Barebones empty template
         outFile.close();
     }
 }
@@ -226,6 +220,18 @@ int main() {
       char class_name[256] = {0};
       GetClassNameA((HWND)hwnd, class_name, sizeof(class_name));
       return std::string(class_name);
+    });
+    wm.set_function("register_hotkey", [](int id, int modifiers, int vk) {
+      UnregisterHotKey(NULL, id); // Safety cleanup
+      if (RegisterHotKey(NULL, id, modifiers, vk)) {
+        g_registered_hotkeys.push_back(id);
+        return true;
+      }
+      return false;
+    });
+
+    wm.set_function("close_window", [](size_t hwnd) {
+      PostMessage((HWND)hwnd, WM_CLOSE, 0, 0); // Native window close command
     });
 
     wm.set_function("get_window_title", [](size_t hwnd) {
@@ -636,6 +642,9 @@ int main() {
 
     // Unregister all hotkeys on clean exit
     for (int i = 101; i <= 109; ++i) UnregisterHotKey(NULL, i);
+    for (int id : g_registered_hotkeys) {
+      UnregisterHotKey(NULL, id);
+    }
     for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
     for (int i = 301; i <= 306; ++i) UnregisterHotKey(NULL, i);
     for (int i = 401; i <= 404; ++i) UnregisterHotKey(NULL, i);
