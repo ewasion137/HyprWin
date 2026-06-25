@@ -27,9 +27,9 @@ function topbar.draw(anim_y)
     local bar_w = sw - 40
     local bar_x = 20
 
-    -- Outer Bar layout
+    -- Fully bound to Design Tokens
     ui.fill_rounded_rect(bar_x, by, bar_w, t.bar_height, t.rounding, t.bg_color[1], t.bg_color[2], t.bg_color[3], t.bg_color[4])
-    ui.draw_rounded_rect(bar_x, by, bar_w, t.bar_height, t.rounding, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], 0.30, 1.5)
+    ui.draw_rounded_rect(bar_x, by, bar_w, t.bar_height, t.rounding, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], 0.30, t.border_size)
 
     -- Dynamic Workspaces
     for i = 1, 9 do
