@@ -1,4 +1,3 @@
--- scripts/main.lua
 HyprWin = {}
 HyprWin.windows = {}
 HyprWin.focused_window = nil
@@ -22,7 +21,6 @@ HyprWin.theme = {
     font_family = "Segoe UI Variable",
     icon_font_family = "Segoe MDL2 Assets",
     
-    -- Design tokens (Default Fallbacks)
     bg_color = { 0.02, 0.02, 0.03, 0.90 },
     border_color = { 0.15, 0.15, 0.18, 0.60 },
     active_border_color = { 0.70, 0.40, 1.00, 1.00 },
@@ -34,6 +32,27 @@ HyprWin.theme = {
     
     bar_height = 30
 }
+
+-- Trim helper (Must be defined first for other modules to use it on load)
+function string.trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
+-- Filter list to ignore background processes and system overlays
+local ignored_classes = {
+    "WorkerW", "Progman", "Shell_TrayWnd", "HyprWinOverlay",
+    "Chrome_ChildWin_Templ", "GhostWindow", "DesktopWindowXamlSource", 
+    "MSCTFIME UI", "IME", "CicMarshalWnd", "TaskManagerWindow"
+}
+
+-- Safe window tracking filter function
+function should_ignore(hwnd, title, class)
+    if title == "" and class == "" then return true end
+    for _, ic in ipairs(ignored_classes) do
+        if class == ic then return true end
+    end
+    return false
+end
 
 package.path = package.path .. ";./scripts/?.lua;./scripts/ui/?.lua;./scripts/?/init.lua"
 
