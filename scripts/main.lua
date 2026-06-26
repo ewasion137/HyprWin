@@ -10,6 +10,14 @@ HyprWin.fullscreen_windows = {}
 HyprWin.workspace_ratios = {}  
 HyprWin.layout_mode = "bsp"
 HyprWin.anim_speed = 0.15
+
+-- Geometry caching and animations
+HyprWin.window_rects = {}
+HyprWin.original_rects = {}
+HyprWin.new_windows = {}
+HyprWin.window_targets = {}
+HyprWin.window_currents = {}
+
 local is_retiling = false
 
 -- --- THEME DESIGN SYSTEM TOKENS ---
@@ -114,6 +122,150 @@ local function solve_bezier(p1, p2, t)
     
     return get_pt(y1, y2, guess)
 end
+
+-- Spring physics solver using Euler integration with sub-stepping
+local function solve_spring(curr, vel, target, stiffness, dampening, mass, dt)
+    if dt <= 0 then return curr, vel end
+    dt = math.min(dt, 0.1) -- Limit dt to prevent instability on extreme drops
+    local steps = 8
+    local sdt = dt / steps
+    for i = 1, steps do
+        local dx = curr - target
+        local force = -stiffness * dx - dampening * vel
+        local accel = force / mass
+        vel = vel + accel * sdt
+        curr = curr + vel * sdt
+    end
+    return curr, vel
+end
+
+-- Helper to retrieve spring parameters for an animation leaf
+local function get_spring_params(leaf)
+    if HyprWin.anim_active == false then
+        return nil
+    end
+
+    local stiffness, dampening, mass = 100, 15, 1.0
+    local anim = HyprWin.animations and (HyprWin.animations[leaf] or HyprWin.animations["windows"] or HyprWin.animations["global"])
+    if anim then
+        if anim.enabled == false then
+            return nil
+        end
+        local spring_name = anim.spring
+        if spring_name and HyprWin.curves and HyprWin.curves[spring_name] then
+            local curve = HyprWin.curves[spring_name]
+            if curve.type == "spring" then
+                stiffness = curve.stiffness or stiffness
+                dampening = curve.dampening or dampening
+                mass = curve.mass or mass
+            end
+        elseif anim.bezier and HyprWin.curves and HyprWin.curves[anim.bezier] then
+            -- Bezier mapping to a snappy spring fallback
+            stiffness = 120
+            dampening = 18
+            mass = 1.0
+        end
+    end
+    return stiffness, dampening, mass
+end
+
+-- Tiling layout calculation for a workspace with screen offset (for sliding)
+local function layout_workspace(ws, offset_x, offset_y)
+    local ws_windows = {}
+    for _, hwnd in ipairs(HyprWin.windows) do
+        local w_ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+        local is_sticky = HyprWin.sticky_windows[hwnd]
+        if (w_ws == ws or is_sticky) and not wm.is_minimized(hwnd) and not HyprWin.floating_windows[hwnd] then
+            table.insert(ws_windows, hwnd)
+        end
+    end
+
+    local n = #ws_windows
+    if n == 0 then return end
+
+    local sw, sh = wm.get_screen_size()
+    local t = HyprWin.theme
+    local bar_h = t.bar_height + 5
+    local tx, ty = t.gaps_out + offset_x, bar_h + t.gaps_out + offset_y
+    local tw, th = sw - (t.gaps_out * 2), sh - bar_h - (t.gaps_out * 2)
+
+    local current_ratio = HyprWin.workspace_ratios[ws] or 0.5
+
+    local function recursive_tile(x, y, w, h, first, last, depth)
+        depth = depth or 0
+        if first > last then return end
+        if first == last then
+            local hwnd = ws_windows[first]
+            if hwnd then
+                HyprWin.window_targets[hwnd] = { x = x, y = y, w = w, h = h }
+            end
+            return
+        end
+
+        local mid = math.floor((first + last) / 2)
+        local ratio = (depth == 0) and current_ratio or 0.5
+
+        if w > h then
+            local w1 = math.floor((w - t.gaps_in) * ratio)
+            recursive_tile(x, y, w1, h, first, mid, depth + 1)
+            recursive_tile(x + w1 + t.gaps_in, y, w - w1 - t.gaps_in, h, mid + 1, last, depth + 1)
+        else
+            local h1 = math.floor((h - t.gaps_in) * ratio)
+            recursive_tile(x, y, w, h1, first, mid, depth + 1)
+            recursive_tile(x, y + h1 + t.gaps_in, w, h - h1 - t.gaps_in, mid + 1, last, depth + 1)
+        end
+    end
+
+    local active_layout = HyprWin.workspace_rules[ws] or HyprWin.layout_mode
+
+    if active_layout == "bsp" then
+        recursive_tile(tx, ty, tw, th, 1, n, 0)
+    elseif active_layout == "master" then
+        if n == 1 then
+            HyprWin.window_targets[ws_windows[1]] = { x = tx, y = ty, w = tw, h = th }
+        else
+            local master_w = math.floor((tw - t.gaps_in) * current_ratio)
+            local stack_w = tw - master_w - t.gaps_in
+            HyprWin.window_targets[ws_windows[1]] = { x = tx, y = ty, w = master_w, h = th }
+            local stack_n = n - 1
+            local stack_h = math.floor((th - t.gaps_in * (stack_n - 1)) / stack_n)
+            for i = 2, n do
+                local sy = ty + (i - 2) * (stack_h + t.gaps_in)
+                local sh = (i == n) and (th - (sy - ty)) or stack_h
+                HyprWin.window_targets[ws_windows[i]] = { x = tx + master_w + t.gaps_in, y = sy, w = stack_w, h = sh }
+            end
+        end
+    end
+end
+
+-- Workspace switch trigger supporting slide transitions
+local function switch_workspace(target_ws)
+    if target_ws == HyprWin.current_workspace then return end
+    
+    local old_ws = HyprWin.current_workspace
+    HyprWin.current_workspace = target_ws
+    
+    local ws_anim = HyprWin.animations and (HyprWin.animations["workspaces"] or HyprWin.animations["global"])
+    if ws_anim and ws_anim.enabled ~= false and HyprWin.anim_active ~= false then
+        local duration = 0.35
+        if ws_anim.speed and ws_anim.speed > 0 then
+            duration = 3.0 / ws_anim.speed
+        end
+        HyprWin.ws_transition = {
+            old = old_ws,
+            new = target_ws,
+            start_time = os.clock(),
+            duration = duration,
+            style = ws_anim.style or "slide",
+            direction = (target_ws > old_ws) and 1 or -1
+        }
+    else
+        HyprWin.ws_transition = nil
+    end
+    
+    HyprWin.retile()
+end
+HyprWin.switch_workspace = switch_workspace
 
 -- Initialize state engines for smooth curves
 HyprWin.anim_states = {
@@ -232,39 +384,34 @@ HyprWin.retile = function()
             end
         end
 
-        if not HyprWin.workspace_ratios[HyprWin.current_workspace] then
-            HyprWin.workspace_ratios[HyprWin.current_workspace] = 0.5
-        end
-
-        local active_workspace_windows = {}
         local fullscreen_hwnd = nil
-
         for _, hwnd in ipairs(HyprWin.windows) do
             local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
             local is_sticky = HyprWin.sticky_windows[hwnd]
             local is_active_ws = (ws == HyprWin.current_workspace)
-            local is_special = (ws == HyprWin.active_special_workspace) -- Check if on active scratchpad
+            local is_special = (ws == HyprWin.active_special_workspace)
 
-            if is_active_ws or is_sticky or is_special then
+            local in_transition = false
+            if HyprWin.ws_transition and (ws == HyprWin.ws_transition.old or ws == HyprWin.ws_transition.new) then
+                in_transition = true
+            end
+
+            if is_active_ws or is_sticky or is_special or in_transition then
                 if not wm.is_minimized(hwnd) then
                     if HyprWin.fullscreen_windows[hwnd] then
                         fullscreen_hwnd = hwnd
                     end
 
-                    -- Windows stashed in the scratchpad are forced to float
                     if is_special then
                         HyprWin.floating_windows[hwnd] = true
                     end
 
                     if not HyprWin.floating_windows[hwnd] then
-                        table.insert(active_workspace_windows, hwnd)
                     else
-                        -- Restore floating/sticky/special window safely
                         local rect = HyprWin.window_rects[hwnd]
                         if (rect and (rect[1] < -10000 or rect[2] < -10000)) or is_special then
                             local saved = HyprWin.floating_rects[hwnd]
                             if is_special and not saved then
-                                -- Center scratchpad window with 70% screen scale layout
                                 local sw, sh = wm.get_screen_size()
                                 saved = { math.floor(sw * 0.15), math.floor(sh * 0.15), math.floor(sw * 0.70), math.floor(sh * 0.70) }
                                 HyprWin.floating_rects[hwnd] = saved
@@ -276,16 +423,16 @@ HyprWin.retile = function()
                     end
                 end
             else
-                -- Save current geometry before stashing if the window is floating
                 if HyprWin.floating_windows[hwnd] then
                     local rect = HyprWin.window_rects[hwnd]
                     if rect and rect[1] >= -10000 and rect[2] >= -10000 then
                         HyprWin.floating_rects[hwnd] = rect
                     end
                 end
-                -- Move window off-screen to stash
                 wm.move_window(hwnd, -32000, -32000, 800, 600)
                 HyprWin.window_rects[hwnd] = { -32000, -32000, 800, 600 }
+                HyprWin.window_targets[hwnd] = nil
+                HyprWin.window_currents[hwnd] = nil
             end
         end
 
@@ -297,48 +444,54 @@ HyprWin.retile = function()
         local tw, th = sw - (t.gaps_out * 2), sh - bar_h - (t.gaps_out * 2)
 
         if fullscreen_hwnd then
-            for _, hwnd in ipairs(active_workspace_windows) do
-                if hwnd == fullscreen_hwnd then
-                    wm.move_window(hwnd, tx, ty, tw, th)
-                else
-                    wm.move_window(hwnd, -32000, -32000, 800, 600)
+            for _, hwnd in ipairs(HyprWin.windows) do
+                local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+                if (ws == HyprWin.current_workspace) and not HyprWin.floating_windows[hwnd] then
+                    if hwnd == fullscreen_hwnd then
+                        HyprWin.window_targets[hwnd] = { x = tx, y = ty, w = tw, h = th }
+                    else
+                        wm.move_window(hwnd, -32000, -32000, 800, 600)
+                        HyprWin.window_targets[hwnd] = nil
+                        HyprWin.window_currents[hwnd] = nil
+                    end
                 end
             end
             return
         end
 
-        local n = #active_workspace_windows
-        if n == 0 then return end
+        if HyprWin.ws_transition then
+            local trans = HyprWin.ws_transition
+            local solved = trans.solved or 0.0
+            local dir = trans.direction
 
-        local current_ratio = HyprWin.workspace_ratios[HyprWin.current_workspace]
+            local old_offset_x, old_offset_y = 0, 0
+            local new_offset_x, new_offset_y = 0, 0
 
-        local function recursive_tile(x, y, w, h, first, last, depth)
-            depth = depth or 0
-            if first == last then
-                wm.move_window(active_workspace_windows[first], x, y, w, h)
-                return
-            end
-
-            local mid = math.floor((first + last) / 2)
-            local ratio = (depth == 0) and current_ratio or 0.5
-
-            if w > h then
-                local w1 = math.floor((w - t.gaps_in) * ratio)
-                recursive_tile(x, y, w1, h, first, mid, depth + 1)
-                recursive_tile(x + w1 + t.gaps_in, y, w - w1 - t.gaps_in, h, mid + 1, last, depth + 1)
+            if trans.style == "slidevert" then
+                old_offset_y = -solved * dir * sh
+                new_offset_y = (1 - solved) * dir * sh
             else
-                local h1 = math.floor((h - t.gaps_in) * ratio)
-                recursive_tile(x, y, w, h1, first, mid, depth + 1)
-                recursive_tile(x, y + h1 + t.gaps_in, w, h - h1 - t.gaps_in, mid + 1, last, depth + 1)
+                old_offset_x = -solved * dir * sw
+                new_offset_x = (1 - solved) * dir * sw
             end
-        end
 
-        local active_layout = HyprWin.workspace_rules[HyprWin.current_workspace] or HyprWin.layout_mode
+            for _, hwnd in ipairs(HyprWin.windows) do
+                local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+                if ws ~= trans.old and ws ~= trans.new and not HyprWin.sticky_windows[hwnd] then
+                    HyprWin.window_targets[hwnd] = nil
+                end
+            end
 
-        if active_layout == "bsp" then
-            recursive_tile(tx, ty, tw, th, 1, n, 0)
-        elseif active_layout == "master" then
-            get_master_tiles(tx, ty, tw, th, active_workspace_windows)
+            layout_workspace(trans.old, old_offset_x, old_offset_y)
+            layout_workspace(trans.new, new_offset_x, new_offset_y)
+        else
+            for _, hwnd in ipairs(HyprWin.windows) do
+                local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+                if ws ~= HyprWin.current_workspace and not HyprWin.sticky_windows[hwnd] then
+                    HyprWin.window_targets[hwnd] = nil
+                end
+            end
+            layout_workspace(HyprWin.current_workspace, 0, 0)
         end
     end)
 
@@ -371,6 +524,9 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
             local ws = HyprWin.current_workspace
             HyprWin.window_workspaces[hwnd] = ws
             
+            -- Set creation flag for entrance animation
+            HyprWin.new_windows[hwnd] = true
+
             -- Trigger rules parser!
             apply_window_rules(hwnd, title, class)
         end
@@ -402,11 +558,105 @@ local function lerp(current, target, speed)
     return current + (target - current) * speed
 end
 
+local last_frame_time = nil
+
 HyprWin.on_render = function()
     local time = os.clock()
     local t = HyprWin.theme
 
-    -- Evaluate math Bezier curves configured in your Linux theme files
+    -- Track frame delta (dt)
+    if not last_frame_time then last_frame_time = time end
+    local dt = time - last_frame_time
+    last_frame_time = time
+
+    -- Update workspace transition if active
+    if HyprWin.ws_transition then
+        local elapsed = time - HyprWin.ws_transition.start_time
+        local progress = math.min(1.0, elapsed / HyprWin.ws_transition.duration)
+        local solved = progress * (2 - progress) -- Quadratic ease-out
+
+        HyprWin.ws_transition.solved = solved
+        if progress >= 1.0 then
+            HyprWin.ws_transition = nil
+        end
+        -- Trigger retiling to update target positions of sliding windows
+        HyprWin.retile()
+    end
+
+    -- Run spring physics solver for window movement
+    local stiffness, dampening, mass = get_spring_params("windows")
+    if stiffness then
+        for _, hwnd in ipairs(HyprWin.windows) do
+            if not wm.is_minimized(hwnd) then
+                local target = HyprWin.window_targets[hwnd]
+                local curr = HyprWin.window_currents[hwnd]
+
+                if target then
+                    if HyprWin.new_windows[hwnd] then
+                        local style = "slide"
+                        local win_in = HyprWin.animations["windowsIn"] or HyprWin.animations["windows"]
+                        if win_in and win_in.style then
+                            style = win_in.style
+                        end
+                        
+                        if style:match("popin") then
+                            local w = target.w * 0.85
+                            local h = target.h * 0.85
+                            curr = {
+                                x = target.x + (target.w - w)/2,
+                                y = target.y + (target.h - h)/2,
+                                w = w,
+                                h = h,
+                                vx = 0, vy = 0, vw = 0, vh = 0
+                            }
+                        else -- slide style
+                            curr = {
+                                x = target.x,
+                                y = target.y + 200,
+                                w = target.w,
+                                h = target.h,
+                                vx = 0, vy = 0, vw = 0, vh = 0
+                            }
+                        end
+                        HyprWin.window_currents[hwnd] = curr
+                        HyprWin.new_windows[hwnd] = nil
+                    end
+
+                    if not curr then
+                        local ax, ay, aw, ah = wm.get_window_rect(hwnd)
+                        curr = { x = ax, y = ay, w = aw, h = ah, vx = 0, vy = 0, vw = 0, vh = 0 }
+                        HyprWin.window_currents[hwnd] = curr
+                    end
+
+                    curr.x, curr.vx = solve_spring(curr.x, curr.vx, target.x, stiffness, dampening, mass, dt)
+                    curr.y, curr.vy = solve_spring(curr.y, curr.vy, target.y, stiffness, dampening, mass, dt)
+                    curr.w, curr.vw = solve_spring(curr.w, curr.vw, target.w, stiffness, dampening, mass, dt)
+                    curr.h, curr.vh = solve_spring(curr.h, curr.vh, target.h, stiffness, dampening, mass, dt)
+
+                    wm.move_window(hwnd, curr.x, curr.y, curr.w, curr.h)
+                else
+                    if not HyprWin.floating_windows[hwnd] then
+                        wm.move_window(hwnd, -32000, -32000, 800, 600)
+                    end
+                end
+            end
+        end
+    else
+        -- Instant tiling fallback
+        for _, hwnd in ipairs(HyprWin.windows) do
+            local target = HyprWin.window_targets[hwnd]
+            if target then
+                wm.move_window(hwnd, target.x, target.y, target.w, target.h)
+                HyprWin.window_currents[hwnd] = { x = target.x, y = target.y, w = target.w, h = target.h, vx = 0, vy = 0, vw = 0, vh = 0 }
+            else
+                if not HyprWin.floating_windows[hwnd] then
+                    wm.move_window(hwnd, -32000, -32000, 800, 600)
+                end
+            end
+        end
+    end
+
+    -- Evaluate math Bezier curves for bar and launcher
     local bar_y = update_animation("bar", 0)
     local launcher_alpha = update_animation("launcher", HyprWin.launcher_active and 1 or 0)
     
@@ -414,15 +664,42 @@ HyprWin.on_render = function()
     HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
 
     -- Window Borders drawing directly bound to layout theme tokens
+    local sw, sh = wm.get_screen_size()
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-        if ws == HyprWin.current_workspace and not wm.is_minimized(hwnd) then
-            local x, y, w, h = wm.get_window_rect(hwnd)
-            if hwnd == HyprWin.focused_window then
-                local glow = 0.1 * math.sin(time * 5)
+        local is_sticky = HyprWin.sticky_windows[hwnd]
+        local is_active_ws = (ws == HyprWin.current_workspace)
+        local in_transition = false
+        if HyprWin.ws_transition and (ws == HyprWin.ws_transition.old or ws == HyprWin.ws_transition.new) then
+            in_transition = true
+        end
+
+        if (is_active_ws or is_sticky or in_transition) and not wm.is_minimized(hwnd) then
+            local x, y, w, h
+            if HyprWin.floating_windows[hwnd] then
+                x, y, w, h = wm.get_window_rect(hwnd)
+            else
+                local curr = HyprWin.window_currents[hwnd]
+                if curr then
+                    x, y, w, h = curr.x, curr.y, curr.w, curr.h
+                else
+                    x, y, w, h = wm.get_window_rect(hwnd)
+                end
+            end
+            
+            -- Only draw borders if window is visible on the screen bounds
+            if x > -10000 and y > -10000 and x < sw and y < sh then
                 local act = t.active_border_color
-                ui.draw_rounded_rect(x-3, y-3, w+6, h+6, t.rounding + 4, act[1], act[2], act[3], 0.2 + glow, 8) 
-                ui.draw_rounded_rect(x, y, w, h, t.rounding, act[1], act[2], act[3], act[4], t.border_size) 
+                local inact = t.border_color
+                if hwnd == HyprWin.focused_window then
+                    local glow = 0.1 * math.sin(time * 5)
+                    ui.draw_rounded_rect(x-3, y-3, w+6, h+6, t.rounding + 4, act[1], act[2], act[3], 0.2 + glow, 8) 
+                    ui.draw_rounded_rect(x, y, w, h, t.rounding, act[1], act[2], act[3], act[4], t.border_size) 
+                else
+                    if inact and inact[4] > 0 then
+                        ui.draw_rounded_rect(x, y, w, h, t.rounding, inact[1], inact[2], inact[3], inact[4], t.border_size) 
+                    end
+                end
             end
         end
     end
@@ -509,10 +786,7 @@ end
 HyprWin.on_hotkey = function(id)
     if id >= 101 and id <= 109 then
         local target_ws = id - 100
-        if target_ws ~= HyprWin.current_workspace then
-            HyprWin.current_workspace = target_ws
-            HyprWin.retile()
-        end
+        switch_workspace(target_ws)
     elseif id >= 201 and id <= 209 then
         local target_ws = id - 200
         local focused = HyprWin.focused_window

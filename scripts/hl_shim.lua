@@ -169,6 +169,18 @@ hl.env = function() end
 hl.gesture = function() end
 hl.device = function() end
 
+local function parse_workspace(ws_name)
+    local ws_num = tonumber(ws_name)
+    if not ws_num then
+        if ws_name == "e+1" or ws_name == "m+1" then
+            ws_num = math.min(10, HyprWin.current_workspace + 1)
+        elseif ws_name == "e-1" or ws_name == "m-1" then
+            ws_num = math.max(1, HyprWin.current_workspace - 1)
+        end
+    end
+    return ws_num or ws_name
+end
+
 HyprWin.active_special_workspace = nil
 
 -- Smart callable table for workspace dispatcher
@@ -188,11 +200,15 @@ local workspace_dispatcher = setmetatable({
     end
 }, {
     __call = function(self, ws_name)
-        local ws_num = tonumber(ws_name)
         return function()
-            if ws_num and ws_num ~= HyprWin.current_workspace then
-                HyprWin.current_workspace = ws_num
-                HyprWin.retile()
+            local ws = parse_workspace(ws_name)
+            if type(ws) == "number" and ws ~= HyprWin.current_workspace then
+                if HyprWin.switch_workspace then
+                    HyprWin.switch_workspace(ws)
+                else
+                    HyprWin.current_workspace = ws
+                    HyprWin.retile()
+                end
             end
         end
     end
@@ -239,7 +255,7 @@ hl.dsp = {
                 if opts then
                     if opts.workspace then
                         -- Move focused window to specific workspace (e.g. 2 or "special:magic")
-                        local ws = tonumber(opts.workspace) or opts.workspace
+                        local ws = parse_workspace(opts.workspace)
                         HyprWin.window_workspaces[focused] = ws
                         HyprWin.retile()
                     elseif opts.direction then
@@ -258,12 +274,24 @@ hl.dsp = {
     },
     focus = function(opts)
         return function()
-            if opts and opts.direction then
-                local dir_map = { l = "left", r = "right", u = "up", d = "down" }
-                local target = dir_map[opts.direction] or opts.direction
-                if find_neighbor then
-                    local neighbor = find_neighbor(target)
-                    if neighbor then wm.focus_window(neighbor) end
+            if opts then
+                if opts.direction then
+                    local dir_map = { l = "left", r = "right", u = "up", d = "down" }
+                    local target = dir_map[opts.direction] or opts.direction
+                    if find_neighbor then
+                        local neighbor = find_neighbor(target)
+                        if neighbor then wm.focus_window(neighbor) end
+                    end
+                elseif opts.workspace then
+                    local ws = parse_workspace(opts.workspace)
+                    if type(ws) == "number" and ws ~= HyprWin.current_workspace then
+                        if HyprWin.switch_workspace then
+                            HyprWin.switch_workspace(ws)
+                        else
+                            HyprWin.current_workspace = ws
+                            HyprWin.retile()
+                        end
+                    end
                 end
             end
         end
@@ -274,11 +302,11 @@ hl.dsp = {
     dpms = function() return function() end end,
     workspace = workspace_dispatcher, -- Register the smart workspace dispatcher
     movetoworkspace = function(ws_name)
-        local ws_num = tonumber(ws_name)
         return function()
             local focused = HyprWin.focused_window
-            if focused and ws_num then
-                HyprWin.window_workspaces[focused] = ws_num
+            if focused then
+                local ws = parse_workspace(ws_name)
+                HyprWin.window_workspaces[focused] = ws
                 HyprWin.retile()
             end
         end
