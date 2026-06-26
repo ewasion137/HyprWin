@@ -174,11 +174,11 @@ hl.dsp = {
             end
         end
     },
-    focus = function(opts)
+    movefocus = function(dir)
+        local dir_map = { l = "left", r = "right", u = "up", d = "down" }
         return function()
-            if opts and opts.direction then
-                local dir_map = { l = "left", r = "right", u = "up", d = "down" }
-                local target = dir_map[opts.direction] or opts.direction
+            local target = dir_map[dir]
+            if target then
                 local neighbor = find_neighbor(target)
                 if neighbor then wm.focus_window(neighbor) end
             end
@@ -205,6 +205,7 @@ hl.dsp = {
     }
 end
 
+-- Hotkey registration mapping
 hl.bind = function(combo, action, opts)
     local mod, vk = parse_key_combo(combo)
     if vk == 0 then return end
@@ -214,17 +215,12 @@ hl.bind = function(combo, action, opts)
     wm.register_hotkey(id, mod, vk)
 end
 
--- Override on_hotkey to intercept dynamic bindings
-local old_hotkey_handler = HyprWin.on_hotkey
+-- Main hotkey callback dispatcher called from C++
 HyprWin.on_hotkey = function(id)
     local callback = keybind_callbacks[id]
     if callback then
         if type(callback) == "function" then
             callback()
         end
-    else
-        if old_hotkey_handler then old_hotkey_handler(id) end
     end
 end
-
-return hl
