@@ -72,13 +72,23 @@ void Renderer::fill_rounded_rect(float x, float y, float w, float h, float radiu
     target->FillRoundedRectangle(roundedRect, brush);
 }
 
+// Helper: properly decode UTF-8 string to UTF-16 wstring using WinAPI
+static std::wstring utf8_to_wstring(const std::string& utf8) {
+  if (utf8.empty()) return L"";
+  int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), nullptr, 0);
+  if (len <= 0) return L"";
+  std::wstring result(len, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), (int)utf8.size(), &result[0], len);
+  return result;
+}
+
 // Render dynamic text on the transparent overlay using DirectWrite text layout
 void Renderer::draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName) {
   if (!target || !writeFactory) return;
 
   IDWriteTextFormat* textFormat = nullptr;
-  std::wstring wfont(fontName.begin(), fontName.end());
-  std::wstring wtext(text.begin(), text.end());
+  std::wstring wfont = utf8_to_wstring(fontName);
+  std::wstring wtext = utf8_to_wstring(text);
 
   HRESULT hr = writeFactory->CreateTextFormat(
       wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
@@ -104,8 +114,8 @@ float Renderer::measure_text_width(const std::string& text, float size, const st
   if (!writeFactory) return 0.0f;
 
   IDWriteTextFormat* fmt = nullptr;
-  std::wstring wfont(fontName.begin(), fontName.end());
-  std::wstring wtext(text.begin(), text.end());
+  std::wstring wfont = utf8_to_wstring(fontName);
+  std::wstring wtext = utf8_to_wstring(text);
 
   HRESULT hr = writeFactory->CreateTextFormat(
       wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
