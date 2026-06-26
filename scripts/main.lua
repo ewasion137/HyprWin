@@ -89,6 +89,130 @@ local function is_tracked(hwnd)
     return nil
 end
 
+-- Solve Bezier curves using binary search approximation
+local function solve_bezier(p1, p2, t)
+    local x1, y1 = p1[1], p1[2]
+    local x2, y2 = p2[1], p2[2]
+    
+    local function get_pt(n1, n2, t_val)
+        return 3 * (1 - t_val)^2 * t_val * n1 + 3 * (1 - t_val) * t_val^2 * n2 + t_val^3
+    end
+    
+    local low, high = 0.0, 1.0
+    local guess = t
+    for i = 1, 8 do
+        local current_x = get_pt(x1, x2, guess)
+        if math.abs(current_x - t) < 0.001 then
+            break
+        elseif current_x < t then
+            low = guess
+        else
+            high = guess
+        end
+        guess = (low + high) / 2
+    end
+    
+    return get_pt(y1, y2, guess)
+end
+
+-- Initialize state engines for smooth curves
+HyprWin.anim_states = {
+    bar = { current = -40, start_val = -40, target = -40, start_time = 0, duration = 0.35, curve = "easeOutQuint" },
+    launcher = { current = 0, start_val = 0, target = 0, start_time = 0, duration = 0.28, curve = "md3_decel" }
+}
+
+-- Calculate animated progress on the fly using active configuration curves
+local function update_animation(name, target_val)
+    local anim = HyprWin.anim_states[name]
+    if anim.target ~= target_val then
+        anim.start_val = anim.current
+        anim.target = target_val
+        anim.start_time = os.clock()
+    end
+    
+    local elapsed = os.clock() - anim.start_time
+    local progress = math.min(1.0, elapsed / anim.duration)
+    
+    -- Default ease-out curve fallback
+    local p1, p2 = { 0.25, 0.1 }, { 0.25, 1.0 }
+    if anim.curve and HyprWin.curves and HyprWin.curves[anim.curve] then
+        local curve = HyprWin.curves[anim.curve]
+        if curve.type == "bezier" and curve.points then
+            p1, p2 = curve.points[1], curve.points[2]
+        end
+    end
+    
+    local solved = solve_bezier(p1, p2, progress)
+    anim.current = anim.start_val + (anim.target - anim.start_val) * solved
+    return anim.current
+end
+
+-- Apply advanced sizing and placement window rules
+local function apply_window_rules(hwnd, title, class)
+    if not HyprWin.window_rules then return end
+    
+    -- Simple flat float match
+    local should_float = false
+    for _, pattern in ipairs(HyprWin.window_rules.float or {}) do
+        if class:match(pattern) or title:match(pattern) then
+            should_float = true
+            break
+        end
+    end
+    
+    if should_float then
+        HyprWin.floating_windows[hwnd] = true
+        local x, y, w, h = wm.get_window_rect(hwnd)
+        HyprWin.floating_rects[hwnd] = { x, y, w, h }
+    end
+
+    -- Evaluate advanced rules with screen size math expressions (like monitor_w * 0.48)
+    for _, rule in ipairs(HyprWin.window_rules.rules_list or {}) do
+        local m_class = rule.match and rule.match.class
+        local m_title = rule.match and rule.match.title
+        
+        local is_match = false
+        if m_class and class:match(m_class) then is_match = true end
+        if m_title and title:match(m_title) then is_match = true end
+        
+        if is_match then
+            if rule.float then
+                HyprWin.floating_windows[hwnd] = true
+            end
+            
+            if rule.size then
+                local sw, sh = wm.get_screen_size()
+                local target_w = sw * 0.48
+                local target_h = sh * 0.50
+                
+                -- Parse expressions dynamically
+                if type(rule.size[1]) == "string" then
+                    local expr = rule.size[1]:gsub("monitor_w", tostring(sw))
+                    target_w = load("return " .. expr)() or target_w
+                else
+                    target_w = rule.size[1]
+                end
+                
+                if type(rule.size[2]) == "string" then
+                    local expr = rule.size[2]:gsub("monitor_h", tostring(sh))
+                    target_h = load("return " .. expr)() or target_h
+                else
+                    target_h = rule.size[2]
+                end
+                
+                local rx, ry = math.floor((sw - target_w)/2), math.floor((sh - target_h)/2)
+                if rule.move then
+                    rx = tonumber(rule.move[1]) or rx
+                    ry = tonumber(rule.move[2]) or ry
+                end
+                
+                HyprWin.floating_rects[hwnd] = { rx, ry, target_w, target_h }
+                wm.move_window(hwnd, rx, ry, target_w, target_h)
+            end
+        end
+    end
+end
+
 HyprWin.retile = function()
     if is_retiling then return end
     is_retiling = true
