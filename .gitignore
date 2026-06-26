@@ -68,9 +68,8 @@ CTestTestfile.cmake
 !.vscode/extensions.json
 *.code-workspace
 
-# --- Временные файлы ОС ---
-Thumbs.db
-desktop.ini
-
 # --- Lua / Scripting ---
 *.log
+
+# --- Inspirational ---
+Hyprland-main/
