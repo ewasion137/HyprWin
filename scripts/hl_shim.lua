@@ -53,13 +53,13 @@ local function parse_key_combo(combo)
     for i = 1, #parts - 1 do
         local p = parts[i]
         if p == "SUPER" or p == "WIN" then
-            mod = mod + 0x0001
+            mod = mod + 0x0008  -- MOD_WIN
         elseif p == "SHIFT" then
-            mod = mod + 0x0004
+            mod = mod + 0x0004  -- MOD_SHIFT
         elseif p == "CONTROL" or p == "CTRL" then
-            mod = mod + 0x0002
+            mod = mod + 0x0002  -- MOD_CONTROL
         elseif p == "ALT" then
-            mod = mod + 0x0001
+            mod = mod + 0x0001  -- MOD_ALT
         end
     end
 
