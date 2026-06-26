@@ -2,21 +2,18 @@
 hl = {}
 col = {}
 
--- Вспомогательная функция для обрезки пробелов (т.к. в стандартном Lua нет string:trim)
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
 
 local keybind_callbacks = {}
 
-local window_rules = {
-    float = { "Telegram", "Picture-in-picture", "Calculator", "Картинка в картинке" },
-    ignore_classes = { 
-        "Chrome_ChildWin_Templ", "HyprWinOverlay", "GhostWindow", 
-        "DesktopWindowXamlSource", "MSCTFIME UI", "IME", "CicMarshalWnd",
-        "TaskManagerWindow"
-    }
-}
+-- Global storage for active layout rules and curve engines
+HyprWin.window_rules = { float = {}, rules_list = {} }
+HyprWin.workspace_rules = {}
+HyprWin.curves = {}
+HyprWin.animations = {}
+HyprWin.monitors = {}
 
 -- Hex parser supporting both #RRGGBBAA and #RRGGBB
 local function parse_rgba_string(str)
@@ -118,29 +115,57 @@ hl.config = function(cfg)
     end
 end
 
+-- Collect structured window rules for execution
 hl.window_rule = function(rule)
     if not rule or not rule.match then return end
+    table.insert(HyprWin.window_rules.rules_list, rule)
+
     if rule.float then
         if rule.match.class then
             for pattern in string.gmatch(rule.match.class, "[^|]+") do
-                table.insert(window_rules.float, trim(pattern))
+                table.insert(HyprWin.window_rules.float, trim(pattern))
             end
         end
         if rule.match.title then
             for pattern in string.gmatch(rule.match.title, "[^|]+") do
-                table.insert(window_rules.float, trim(pattern))
+                table.insert(HyprWin.window_rules.float, trim(pattern))
             end
         end
     end
 end
 
-hl.workspace_rule = function() end
+-- Track active workspace layout bindings
+hl.workspace_rule = function(rule)
+    if not rule or not rule.workspace then return end
+    local ws = tonumber(rule.workspace) or rule.workspace
+    if rule.layout then
+        local layout = rule.layout
+        if layout == "dwindle" then layout = "bsp" end
+        HyprWin.workspace_rules[ws] = layout
+    end
+end
+
+-- Save custom mathematical animation curves
+hl.curve = function(name, def)
+    if not name or not def then return end
+    HyprWin.curves[name] = def
+end
+
+-- Save specific leaf animation speeds and styles
+hl.animation = function(rule)
+    if not rule or not rule.leaf then return end
+    HyprWin.animations[rule.leaf] = rule
+end
+
+-- Track display scale and workspace configurations
+hl.monitor = function(rule)
+    if not rule then return end
+    table.insert(HyprWin.monitors, rule)
+end
+
 hl.layer_rule = function() end
-hl.monitor = function() end
 hl.on = function() end
 hl.env = function() end
-hl.curve = function() end
-hl.animation = function() end
 hl.gesture = function() end
 hl.device = function() end
 
@@ -187,14 +212,13 @@ hl.dsp = {
             if opts and opts.direction then
                 local dir_map = { l = "left", r = "right", u = "up", d = "down" }
                 local target = dir_map[opts.direction] or opts.direction
-                -- Функция find_neighbor должна быть определена в wm или HyprWin
                 if find_neighbor then
                     local neighbor = find_neighbor(target)
                     if neighbor then wm.focus_window(neighbor) end
                 end
             end
         end
-    end, -- Вот здесь не хватало end
+    end,
     layout = function(mode)
         return function() end
     end,
