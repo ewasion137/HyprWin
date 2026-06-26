@@ -52,6 +52,27 @@ function topbar.draw(anim_y)
         end
     end
 
+    local start_x = bar_x + 8
+    ui.draw_text("\u{E721}", start_x, by + 8, 14, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1, t.icon_font_family)
+
+    -- 2. Область ТРЕЯ (справа перед часами)
+    -- Пока Explorer живой, мы можем только рисовать "заглушку",
+    -- так как получение реальных иконок требует C++ Tray Host.
+    local tray_x = stats_x - 60
+    -- Отрисовка фейковых иконок трея (Telegram, Steam, etc)
+    ui.draw_text("\u{E701}", tray_x, text_y + 1, 11, 1, 1, 1, 0.6, t.icon_font_family) -- Wi-Fi
+    ui.draw_text("\u{E767}", tray_x + 20, text_y + 1, 11, 1, 1, 1, 0.6, t.icon_font_family) -- Vol
+
+    -- 3. Кнопка вызова Control Center (самая правая)
+    local trigger_x = bar_x + bar_w - 25
+    if HyprWin.cc_active then
+        ui.fill_rounded_rect(trigger_x - 5, by + 4, 22, 22, 6, t.accent_color[1], t.accent_color[2], t.accent_color[3], 0.3)
+    end
+    ui.draw_text("\u{E713}", trigger_x, by + 8, 12, 1, 1, 1, 1, t.icon_font_family)
+
+    -- Отрисовка самого меню
+    cc.draw(dt)
+
     -- --- CENTER SECTION: Active Title ---
     if HyprWin.focused_window then
         local title = wm.get_window_title(HyprWin.focused_window)
