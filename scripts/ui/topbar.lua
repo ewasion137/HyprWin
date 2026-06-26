@@ -5,6 +5,9 @@ local WS_W        = 24
 local WS_H        = 18
 local WS_SPACING  = 30
 local WS_OFFSET_X = 20
+local last_cpu = 0
+local last_ram = 0
+local last_stat_update = 0
 
 local function ws_window_count(ws_id)
     local count = 0
@@ -58,10 +61,15 @@ function topbar.draw(anim_y)
     end
 
     -- --- RIGHT SECTION: System Stats ---
-    local cpu = math.floor(wm.get_cpu_usage())
-    local ram = math.floor(wm.get_ram_usage())
-    local time_str = os.date("%H:%M:%S")
-    
+    local time = os.clock()
+    if time - last_stat_update > 1.0 then
+        last_cpu = math.floor(wm.get_cpu_usage())
+        last_ram = math.floor(wm.get_ram_usage())
+        last_stat_update = time
+    end
+
+    local cpu_str = string.format("%d%%", last_cpu)
+    local ram_str = string.format("%d%%", last_ram)
     local stats_x = bar_x + bar_w - 180
     local text_y = by + (t.bar_height - 12) / 2
 
