@@ -169,6 +169,35 @@ hl.env = function() end
 hl.gesture = function() end
 hl.device = function() end
 
+HyprWin.active_special_workspace = nil
+
+-- Smart callable table for workspace dispatcher
+local workspace_dispatcher = setmetatable({
+    toggle_special = function(name)
+        return function()
+            local special_ws = "special:" .. name
+            if HyprWin.active_special_workspace == special_ws then
+                -- Hide the scratchpad (stash windows back)
+                HyprWin.active_special_workspace = nil
+            else
+                -- Reveal scratchpad over current layout
+                HyprWin.active_special_workspace = special_ws
+            end
+            HyprWin.retile()
+        end
+    end
+}, {
+    __call = function(self, ws_name)
+        local ws_num = tonumber(ws_name)
+        return function()
+            if ws_num and ws_num ~= HyprWin.current_workspace then
+                HyprWin.current_workspace = ws_num
+                HyprWin.retile()
+            end
+        end
+    end
+})
+
 hl.dsp = {
     exec_cmd = function(cmd)
         return function() wm.spawn(cmd) end
@@ -201,11 +230,31 @@ hl.dsp = {
                 end
             end
         end,
+        -- Fully implemented window placement and swapping dispatcher
+        move = function(opts)
+            return function()
+                local focused = HyprWin.focused_window
+                if not focused then return end
+                
+                if opts then
+                    if opts.workspace then
+                        -- Move focused window to specific workspace (e.g. 2 or "special:magic")
+                        local ws = tonumber(opts.workspace) or opts.workspace
+                        HyprWin.window_workspaces[focused] = ws
+                        HyprWin.retile()
+                    elseif opts.direction then
+                        -- Swap windows in a spatial direction
+                        local dir_map = { l = "left", r = "right", u = "up", d = "down" }
+                        local target = dir_map[opts.direction] or opts.direction
+                        if swap_direction then swap_direction(target) end
+                    end
+                end
+            end
+        end,
         cycle_next = function() return function() end end,
         pseudo = function() return function() end end,
         drag = function() return function() end end,
-        resize = function() return function() end end,
-        move = function() return function() end end
+        resize = function() return function() end end
     },
     focus = function(opts)
         return function()
@@ -223,15 +272,7 @@ hl.dsp = {
         return function() end
     end,
     dpms = function() return function() end end,
-    workspace = function(ws_name)
-        local ws_num = tonumber(ws_name)
-        return function()
-            if ws_num and ws_num ~= HyprWin.current_workspace then
-                HyprWin.current_workspace = ws_num
-                HyprWin.retile()
-            end
-        end
-    end,
+    workspace = workspace_dispatcher, -- Register the smart workspace dispatcher
     movetoworkspace = function(ws_name)
         local ws_num = tonumber(ws_name)
         return function()

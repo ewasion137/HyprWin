@@ -243,35 +243,49 @@ HyprWin.retile = function()
             local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
             local is_sticky = HyprWin.sticky_windows[hwnd]
             local is_active_ws = (ws == HyprWin.current_workspace)
+            local is_special = (ws == HyprWin.active_special_workspace) -- Check if on active scratchpad
 
-            if is_active_ws or is_sticky then
+            if is_active_ws or is_sticky or is_special then
                 if not wm.is_minimized(hwnd) then
                     if HyprWin.fullscreen_windows[hwnd] then
                         fullscreen_hwnd = hwnd
                     end
 
+                    -- Windows stashed in the scratchpad are forced to float
+                    if is_special then
+                        HyprWin.floating_windows[hwnd] = true
+                    end
+
                     if not HyprWin.floating_windows[hwnd] then
                         table.insert(active_workspace_windows, hwnd)
                     else
-                        local x, y, _, _ = wm.get_window_rect(hwnd)
-                        if x < -10000 or y < -10000 then
-                            local saved_rect = HyprWin.floating_rects[hwnd]
-                            if saved_rect then
-                                wm.move_window(hwnd, saved_rect[1], saved_rect[2], saved_rect[3], saved_rect[4])
-                            else
-                                wm.move_window(hwnd, 150, 150, 1280, 720)
+                        -- Restore floating/sticky/special window safely
+                        local rect = HyprWin.window_rects[hwnd]
+                        if (rect and (rect[1] < -10000 or rect[2] < -10000)) or is_special then
+                            local saved = HyprWin.floating_rects[hwnd]
+                            if is_special and not saved then
+                                -- Center scratchpad window with 70% screen scale layout
+                                local sw, sh = wm.get_screen_size()
+                                saved = { math.floor(sw * 0.15), math.floor(sh * 0.15), math.floor(sw * 0.70), math.floor(sh * 0.70) }
+                                HyprWin.floating_rects[hwnd] = saved
                             end
+                            saved = saved or { 150, 150, 1280, 720 }
+                            wm.move_window(hwnd, saved[1], saved[2], saved[3], saved[4])
+                            HyprWin.window_rects[hwnd] = saved
                         end
                     end
                 end
             else
+                -- Save current geometry before stashing if the window is floating
                 if HyprWin.floating_windows[hwnd] then
-                    local x, y, w, h = wm.get_window_rect(hwnd)
-                    if x >= -10000 and y >= -10000 then
-                        HyprWin.floating_rects[hwnd] = { x, y, w, h }
+                    local rect = HyprWin.window_rects[hwnd]
+                    if rect and rect[1] >= -10000 and rect[2] >= -10000 then
+                        HyprWin.floating_rects[hwnd] = rect
                     end
                 end
+                -- Move window off-screen to stash
                 wm.move_window(hwnd, -32000, -32000, 800, 600)
+                HyprWin.window_rects[hwnd] = { -32000, -32000, 800, 600 }
             end
         end
 
