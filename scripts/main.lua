@@ -9,7 +9,7 @@ HyprWin.sticky_windows = {}
 HyprWin.fullscreen_windows = {} 
 HyprWin.workspace_ratios = {}  
 HyprWin.layout_mode = "bsp"
-HyprWin.anim_speed = 0.15
+HyprWin.anim_speed = 0.28
 
 -- Geometry caching and animations
 HyprWin.window_rects = {}
@@ -145,12 +145,14 @@ local function get_spring_params(leaf)
         return nil
     end
 
-    local stiffness, dampening, mass = 100, 15, 1.0
+    local stiffness, dampening, mass = 140, 18, 1.0
+    local speed = 8
     local anim = HyprWin.animations and (HyprWin.animations[leaf] or HyprWin.animations["windows"] or HyprWin.animations["global"])
     if anim then
         if anim.enabled == false then
             return nil
         end
+        speed = anim.speed or speed
         local spring_name = anim.spring
         if spring_name and HyprWin.curves and HyprWin.curves[spring_name] then
             local curve = HyprWin.curves[spring_name]
@@ -160,13 +162,12 @@ local function get_spring_params(leaf)
                 mass = curve.mass or mass
             end
         elseif anim.bezier and HyprWin.curves and HyprWin.curves[anim.bezier] then
-            -- Bezier mapping to a snappy spring fallback
-            stiffness = 120
-            dampening = 18
+            stiffness = 150
+            dampening = 20
             mass = 1.0
         end
     end
-    return stiffness, dampening, mass
+    return stiffness, dampening, mass, speed
 end
 
 -- Tiling layout calculation for a workspace with screen offset (for sliding)
@@ -382,6 +383,10 @@ HyprWin.retile = function()
             if not HyprWin.window_workspaces[hwnd] then
                 HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
             end
+            if HyprWin.floating_windows[hwnd] then
+                HyprWin.window_targets[hwnd] = nil
+                HyprWin.window_currents[hwnd] = nil
+            end
         end
 
         local fullscreen_hwnd = nil
@@ -563,6 +568,7 @@ local last_frame_time = nil
 HyprWin.on_render = function()
     local time = os.clock()
     local t = HyprWin.theme
+    local sw, sh = wm.get_screen_size()
 
     -- Track frame delta (dt)
     if not last_frame_time then last_frame_time = time end
@@ -584,54 +590,76 @@ HyprWin.on_render = function()
     end
 
     -- Run spring physics solver for window movement
-    local stiffness, dampening, mass = get_spring_params("windows")
+    local stiffness, dampening, mass, speed = get_spring_params("windows")
     if stiffness then
+        local speed_factor = speed / 6.0
+        local anim_dt = dt * speed_factor
         for _, hwnd in ipairs(HyprWin.windows) do
             if not wm.is_minimized(hwnd) then
                 local target = HyprWin.window_targets[hwnd]
                 local curr = HyprWin.window_currents[hwnd]
 
                 if target then
-                    if HyprWin.new_windows[hwnd] then
-                        local style = "slide"
-                        local win_in = HyprWin.animations["windowsIn"] or HyprWin.animations["windows"]
-                        if win_in and win_in.style then
-                            style = win_in.style
+                    local ax, ay, aw, ah = wm.get_window_rect(hwnd)
+                    if not curr or ax < -10000 or ay < -10000 then
+                        local start_x = target.x
+                        local start_y = target.y
+                        
+                        if HyprWin.ws_transition then
+                            local trans = HyprWin.ws_transition
+                            local dir = trans.direction
+                            if trans.style == "slidevert" then
+                                start_y = target.y + dir * sh
+                            else
+                                start_x = target.x + dir * sw
+                            end
+                        elseif HyprWin.new_windows[hwnd] then
+                            local style = "slide"
+                            local win_in = HyprWin.animations["windowsIn"] or HyprWin.animations["windows"]
+                            if win_in and win_in.style then
+                                style = win_in.style
+                            end
+                            
+                            if style:match("popin") then
+                                local w = target.w * 0.85
+                                local h = target.h * 0.85
+                                curr = {
+                                    x = target.x + (target.w - w)/2,
+                                    y = target.y + (target.h - h)/2,
+                                    w = w,
+                                    h = h,
+                                    vx = 0, vy = 0, vw = 0, vh = 0
+                                }
+                            else -- slide style
+                                curr = {
+                                    x = target.x,
+                                    y = target.y + 200,
+                                    w = target.w,
+                                    h = target.h,
+                                    vx = 0, vy = 0, vw = 0, vh = 0
+                                }
+                            end
                         end
                         
-                        if style:match("popin") then
-                            local w = target.w * 0.85
-                            local h = target.h * 0.85
+                        if not curr then
                             curr = {
-                                x = target.x + (target.w - w)/2,
-                                y = target.y + (target.h - h)/2,
-                                w = w,
-                                h = h,
-                                vx = 0, vy = 0, vw = 0, vh = 0
-                            }
-                        else -- slide style
-                            curr = {
-                                x = target.x,
-                                y = target.y + 200,
+                                x = start_x,
+                                y = start_y,
                                 w = target.w,
                                 h = target.h,
                                 vx = 0, vy = 0, vw = 0, vh = 0
                             }
                         end
+                        
                         HyprWin.window_currents[hwnd] = curr
                         HyprWin.new_windows[hwnd] = nil
+                        wm.move_window(hwnd, curr.x, curr.y, curr.w, curr.h)
                     end
 
-                    if not curr then
-                        local ax, ay, aw, ah = wm.get_window_rect(hwnd)
-                        curr = { x = ax, y = ay, w = aw, h = ah, vx = 0, vy = 0, vw = 0, vh = 0 }
-                        HyprWin.window_currents[hwnd] = curr
-                    end
-
-                    curr.x, curr.vx = solve_spring(curr.x, curr.vx, target.x, stiffness, dampening, mass, dt)
-                    curr.y, curr.vy = solve_spring(curr.y, curr.vy, target.y, stiffness, dampening, mass, dt)
-                    curr.w, curr.vw = solve_spring(curr.w, curr.vw, target.w, stiffness, dampening, mass, dt)
-                    curr.h, curr.vh = solve_spring(curr.h, curr.vh, target.h, stiffness, dampening, mass, dt)
+                    curr.x, curr.vx = solve_spring(curr.x, curr.vx, target.x, stiffness, dampening, mass, anim_dt)
+                    curr.y, curr.vy = solve_spring(curr.y, curr.vy, target.y, stiffness, dampening, mass, anim_dt)
+                    curr.w, curr.vw = solve_spring(curr.w, curr.vw, target.w, stiffness, dampening, mass, anim_dt)
+                    curr.h, curr.vh = solve_spring(curr.h, curr.vh, target.h, stiffness, dampening, mass, anim_dt)
 
                     wm.move_window(hwnd, curr.x, curr.y, curr.w, curr.h)
                 else
@@ -664,7 +692,6 @@ HyprWin.on_render = function()
     HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
 
     -- Window Borders drawing directly bound to layout theme tokens
-    local sw, sh = wm.get_screen_size()
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
         local is_sticky = HyprWin.sticky_windows[hwnd]
