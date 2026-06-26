@@ -319,21 +319,12 @@ HyprWin.retile = function()
             end
         end
 
-        if HyprWin.layout_mode == "bsp" then
+        local active_layout = HyprWin.workspace_rules[HyprWin.current_workspace] or HyprWin.layout_mode
+
+        if active_layout == "bsp" then
             recursive_tile(tx, ty, tw, th, 1, n, 0)
-        elseif HyprWin.layout_mode == "master" then
-            -- Master-stack layout fallback
-            local ratio = current_ratio or 0.5
-            local mw = math.floor(tw * ratio)
-            if n == 1 then
-                wm.move_window(active_workspace_windows[1], tx, ty, tw, th)
-            else
-                wm.move_window(active_workspace_windows[1], tx, ty, mw - t.gaps_in, th)
-                local sh_item = math.floor((th - (t.gaps_in * (n - 2))) / (n - 1))
-                for i = 2, n do
-                    wm.move_window(active_workspace_windows[i], tx + mw, ty + (i - 2) * (sh_item + t.gaps_in), tw - mw, sh_item)
-                end
-            end
+        elseif active_layout == "master" then
+            get_master_tiles(tx, ty, tw, th, active_workspace_windows)
         end
     end)
 
@@ -359,8 +350,15 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
 
     if event_type == 0x8002 or event_type == 0x0017 then
         if not is_tracked(hwnd) then
+            local x, y, w, h = wm.get_window_rect(hwnd)
+            HyprWin.original_rects[hwnd] = { x, y, w, h }
+
             table.insert(HyprWin.windows, hwnd)
-            HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+            local ws = HyprWin.current_workspace
+            HyprWin.window_workspaces[hwnd] = ws
+            
+            -- Trigger rules parser!
+            apply_window_rules(hwnd, title, class)
         end
         HyprWin.retile()
     end
@@ -393,6 +391,10 @@ end
 HyprWin.on_render = function()
     local time = os.clock()
     local t = HyprWin.theme
+
+    -- Evaluate math Bezier curves configured in your Linux theme files
+    local bar_y = update_animation("bar", 0)
+    local launcher_alpha = update_animation("launcher", HyprWin.launcher_active and 1 or 0)
     
     HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
     HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
@@ -425,6 +427,7 @@ for _, hwnd in ipairs(existing) do
     if not should_ignore(hwnd, title, class) then
         table.insert(filtered, hwnd)
         HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
+        apply_window_rules(hwnd, title, class)
     end
 end
 
