@@ -92,7 +92,7 @@ hl.config = function(cfg)
         t.border_size = cfg.general.border_size or t.border_size
         
         local layout = cfg.general.layout
-        if layout == "dwindle" then
+        if layout == "dwindle" or layout == "scrolling" or layout == "tabbed" then
             HyprWin.layout_mode = "bsp"
         elseif layout then
             HyprWin.layout_mode = layout
@@ -140,7 +140,10 @@ hl.workspace_rule = function(rule)
     local ws = tonumber(rule.workspace) or rule.workspace
     if rule.layout then
         local layout = rule.layout
-        if layout == "dwindle" then layout = "bsp" end
+        -- Map Linux-only layouts to supported Windows equivalents
+        if layout == "dwindle" or layout == "scrolling" or layout == "tabbed" then
+            layout = "bsp"
+        end
         HyprWin.workspace_rules[ws] = layout
     end
 end

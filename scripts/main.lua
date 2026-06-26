@@ -641,7 +641,7 @@ HyprWin.on_render = function()
                             end
                         end
                         
-                        if not curr then
+                        if not curr or ax < -10000 or ay < -10000 then
                             curr = {
                                 x = start_x,
                                 y = start_y,
