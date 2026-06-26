@@ -2,14 +2,14 @@
 local topbar = {}
 local cc = require("control_center")
 
--- Configuration tokens
+-- Настройки геометрии
 local BAR_MARGIN  = 8
 local WS_W        = 24
 local WS_H        = 18
 local WS_SPACING  = 30
-local WS_OFFSET_X = 45 -- Adjusted for Start icon
+local WS_OFFSET_X = 45 -- Отступ под кнопку "Пуск"
 
--- Cache for performance
+-- Кеш для статов (чтобы не лагало)
 local last_cpu = 0
 local last_ram = 0
 local last_stat_update = 0
@@ -24,30 +24,37 @@ local function ws_window_count(ws_id)
 end
 
 function topbar.draw(anim_y)
-    -- --- 1. INITIALIZATION & GEOMETRY ---
+    -- --- 1. ПОДГОТОВКА ПЕРЕМЕННЫХ ---
     local sw, _ = wm.get_screen_size()
     local t = HyprWin.theme
     local by = anim_y + BAR_MARGIN
     local bar_w = sw - 32
     local bar_x = 16
     
-    -- Common vertical centering for text/icons
+    -- Центрирование текста по вертикали
     local text_y = by + (t.bar_height - 12) / 2
     
-    -- Delta time for animations
+    -- Считаем время для анимаций
     local current_time = os.clock()
     local dt = current_time - last_frame_time
     last_frame_time = current_time
 
-    -- --- 2. BACKGROUND ---
+    -- Обновление статов раз в секунду
+    if current_time - last_stat_update > 1.0 then
+        last_cpu = math.floor(wm.get_cpu_usage())
+        last_ram = math.floor(wm.get_ram_usage())
+        last_stat_update = current_time
+    end
+
+    -- --- 2. ФОН БАРА ---
     ui.fill_rounded_rect(bar_x, by, bar_w, t.bar_height, t.rounding, t.bg_color[1], t.bg_color[2], t.bg_color[3], t.bg_color[4])
     ui.draw_rounded_rect(bar_x, by, bar_w, t.bar_height, t.rounding, t.active_border_color[1], t.active_border_color[2], t.active_border_color[3], 0.2, 1)
 
-    -- --- 3. START BUTTON ---
+    -- --- 3. КНОПКА ПУСК (СЛЕВА) ---
     local start_icon_x = bar_x + 12
     ui.draw_text("\u{E721}", start_icon_x, text_y + 1, 13, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1, t.icon_font_family)
 
-    -- --- 4. WORKSPACES (PILL STYLE) ---
+    -- --- 4. ВОРКСПЕЙСЫ (PILLS) ---
     for i = 1, 7 do
         local is_active = (i == HyprWin.current_workspace)
         local has_wins  = (ws_window_count(i) > 0)
@@ -66,7 +73,7 @@ function topbar.draw(anim_y)
         end
     end
 
-    -- --- 5. CENTER SECTION: WINDOW TITLE ---
+    -- --- 5. ЗАГОЛОВОК ОКНА (ЦЕНТР) ---
     if HyprWin.focused_window then
         local title = wm.get_window_title(HyprWin.focused_window)
         if title:len() > 40 then title = title:sub(1, 37) .. "..." end
@@ -74,15 +81,9 @@ function topbar.draw(anim_y)
         ui.draw_text(title, bar_x + (bar_w - title_w) / 2, text_y, 11, t.text_color[1], t.text_color[2], t.text_color[3], 0.7, t.font_family)
     end
 
-    -- --- 6. RIGHT SECTION: SYSTEM STATS ---
-    if current_time - last_stat_update > 1.0 then
-        last_cpu = math.floor(wm.get_cpu_usage())
-        last_ram = math.floor(wm.get_ram_usage())
-        last_stat_update = current_time
-    end
-
-    local time_str = os.date("%H:%M:%S")
+    -- --- 6. СИСТЕМНЫЕ СТАТЫ (СПРАВА) ---
     local stats_x = bar_x + bar_w - 210
+    local time_str = os.date("%H:%M:%S")
     
     -- CPU
     ui.draw_text("\u{E9D9}", stats_x, text_y + 1, 10, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1, t.icon_font_family)
@@ -95,15 +96,15 @@ function topbar.draw(anim_y)
     -- Time
     ui.draw_text(time_str, stats_x + 125, text_y, 11, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1, t.font_family)
 
-    -- --- 7. TRAY & CONTROL CENTER TRIGGER ---
+    -- --- 7. ТРЕЙ И ТРИГГЕР CC ---
     local trigger_x = bar_x + bar_w - 25
     if HyprWin.cc_active then
         ui.fill_rounded_rect(trigger_x - 5, by + 4, 22, 22, 6, t.accent_color[1], t.accent_color[2], t.accent_color[3], 0.3)
     end
-    -- Control Center Icon (Gear/Settings)
+    -- Иконка шестеренки для Control Center
     ui.draw_text("\u{E713}", trigger_x, text_y + 1, 12, 1, 1, 1, 1, t.icon_font_family)
 
-    -- --- 8. SUB-MODULES RENDER ---
+    -- --- 8. ОТРИСОВКА МЕНЮ CC ---
     cc.draw(dt)
 end
 
