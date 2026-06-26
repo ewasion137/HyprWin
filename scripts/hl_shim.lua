@@ -2,6 +2,11 @@
 hl = {}
 col = {}
 
+-- Вспомогательная функция для обрезки пробелов (т.к. в стандартном Lua нет string:trim)
+local function trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
 local keybind_callbacks = {}
 
 local window_rules = {
@@ -22,7 +27,7 @@ local function parse_rgba_string(str)
     end
     
     if hex then
-        hex = hex:trim()
+        hex = trim(hex)
         if #hex == 6 then
             local r = tonumber(hex:sub(1, 2), 16) / 255
             local g = tonumber(hex:sub(3, 4), 16) / 255
@@ -51,7 +56,7 @@ local function parse_key_combo(combo)
     for i = 1, #parts - 1 do
         local p = parts[i]
         if p == "SUPER" or p == "WIN" then
-            mod = mod + 0x0001 -- Map Super/Win to Alt safely on Windows
+            mod = mod + 0x0001
         elseif p == "SHIFT" then
             mod = mod + 0x0004
         elseif p == "CONTROL" or p == "CTRL" then
@@ -88,7 +93,13 @@ hl.config = function(cfg)
         t.gaps_in = cfg.general.gaps_in or t.gaps_in
         t.gaps_out = cfg.general.gaps_out or t.gaps_out
         t.border_size = cfg.general.border_size or t.border_size
-        HyprWin.layout_mode = cfg.general.layout or HyprWin.layout_mode
+        
+        local layout = cfg.general.layout
+        if layout == "dwindle" then
+            HyprWin.layout_mode = "bsp"
+        elseif layout then
+            HyprWin.layout_mode = layout
+        end
         
         if cfg.general.col then
             local act = parse_rgba_string(cfg.general.col.active_border)
@@ -107,18 +118,17 @@ hl.config = function(cfg)
     end
 end
 
--- Structural Translation for complex official Windows and Workspace Rules
 hl.window_rule = function(rule)
     if not rule or not rule.match then return end
     if rule.float then
         if rule.match.class then
             for pattern in string.gmatch(rule.match.class, "[^|]+") do
-                table.insert(window_rules.float, pattern:trim())
+                table.insert(window_rules.float, trim(pattern))
             end
         end
         if rule.match.title then
             for pattern in string.gmatch(rule.match.title, "[^|]+") do
-                table.insert(window_rules.float, pattern:trim())
+                table.insert(window_rules.float, trim(pattern))
             end
         end
     end
@@ -134,28 +144,25 @@ hl.animation = function() end
 hl.gesture = function() end
 hl.device = function() end
 
--- Emulator for the official Dispatcher Namespace
 hl.dsp = {
     exec_cmd = function(cmd)
         return function() wm.spawn(cmd) end
     end,
     exit = function()
-        os.exit()
+        return function() os.exit() end
     end,
     window = {
         close = function()
-            local focused = HyprWin.focused_window
-            if focused then wm.close_window(focused) end
+            return function()
+                local focused = HyprWin.focused_window
+                if focused then wm.close_window(focused) end
+            end
         end,
         float = function()
             return function()
                 local focused = HyprWin.focused_window
                 if focused then
-                    if HyprWin.floating_windows[focused] then
-                        HyprWin.floating_windows[focused] = nil
-                    else
-                        HyprWin.floating_windows[focused] = true
-                    end
+                    HyprWin.floating_windows[focused] = not HyprWin.floating_windows[focused]
                     HyprWin.retile()
                 end
             end
@@ -164,26 +171,34 @@ hl.dsp = {
             return function()
                 local focused = HyprWin.focused_window
                 if focused then
-                    if HyprWin.fullscreen_windows[focused] then
-                        HyprWin.fullscreen_windows[focused] = nil
-                    else
-                        HyprWin.fullscreen_windows[focused] = true
-                    end
+                    HyprWin.fullscreen_windows[focused] = not HyprWin.fullscreen_windows[focused]
                     HyprWin.retile()
                 end
             end
-        end
+        end,
+        cycle_next = function() return function() end end,
+        pseudo = function() return function() end end,
+        drag = function() return function() end end,
+        resize = function() return function() end end,
+        move = function() return function() end end
     },
-    movefocus = function(dir)
-        local dir_map = { l = "left", r = "right", u = "up", d = "down" }
+    focus = function(opts)
         return function()
-            local target = dir_map[dir]
-            if target then
-                local neighbor = find_neighbor(target)
-                if neighbor then wm.focus_window(neighbor) end
+            if opts and opts.direction then
+                local dir_map = { l = "left", r = "right", u = "up", d = "down" }
+                local target = dir_map[opts.direction] or opts.direction
+                -- Функция find_neighbor должна быть определена в wm или HyprWin
+                if find_neighbor then
+                    local neighbor = find_neighbor(target)
+                    if neighbor then wm.focus_window(neighbor) end
+                end
             end
         end
-    end, -- Closes movefocus function
+    end, -- Вот здесь не хватало end
+    layout = function(mode)
+        return function() end
+    end,
+    dpms = function() return function() end end,
     workspace = function(ws_name)
         local ws_num = tonumber(ws_name)
         return function()
@@ -192,7 +207,7 @@ hl.dsp = {
                 HyprWin.retile()
             end
         end
-    end, -- Closes workspace function
+    end,
     movetoworkspace = function(ws_name)
         local ws_num = tonumber(ws_name)
         return function()
@@ -202,10 +217,9 @@ hl.dsp = {
                 HyprWin.retile()
             end
         end
-    end -- Closes movetoworkspace function
+    end
 }
 
--- Hotkey registration mapping
 hl.bind = function(combo, action, opts)
     local mod, vk = parse_key_combo(combo)
     if vk == 0 then return end
@@ -215,12 +229,9 @@ hl.bind = function(combo, action, opts)
     wm.register_hotkey(id, mod, vk)
 end
 
--- Main hotkey callback dispatcher called from C++
 HyprWin.on_hotkey = function(id)
     local callback = keybind_callbacks[id]
-    if callback then
-        if type(callback) == "function" then
-            callback()
-        end
+    if callback and type(callback) == "function" then
+        callback()
     end
 end
