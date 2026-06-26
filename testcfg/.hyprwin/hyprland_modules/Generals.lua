@@ -1,3 +1,12 @@
+HyprWin.apps = {
+    { name = "Visual Studio Code", path = "code" },
+    { name = "Telegram",          path = "telegram.exe" },
+    { name = "Spotify",           path = "spotify.exe" },
+    { name = "Terminal (Kitty)",  path = "kitty.exe" },
+    { name = "--- System ---",    path = "cmd.exe" },
+    { name = "Power Off",         path = "shutdown /s /t 0" }
+}
+
 hl.config({
   general = {
     gaps_in  = 5,
