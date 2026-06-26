@@ -183,7 +183,7 @@ hl.dsp = {
                 if neighbor then wm.focus_window(neighbor) end
             end
         end
-    },
+    end, -- Closes movefocus function
     workspace = function(ws_name)
         local ws_num = tonumber(ws_name)
         return function()
@@ -192,7 +192,7 @@ hl.dsp = {
                 HyprWin.retile()
             end
         end
-    },
+    end, -- Closes workspace function
     movetoworkspace = function(ws_name)
         local ws_num = tonumber(ws_name)
         return function()
@@ -202,8 +202,8 @@ hl.dsp = {
                 HyprWin.retile()
             end
         end
-    }
-end
+    end -- Closes movetoworkspace function
+}
 
 -- Hotkey registration mapping
 hl.bind = function(combo, action, opts)
