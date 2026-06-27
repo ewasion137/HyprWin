@@ -15,6 +15,9 @@
 #include <fstream>
 #include <windowsx.h>
 #include <shlobj.h>
+#include <thread>
+#include <vector>
+
 
 extern "C" {
 #include <lauxlib.h>
@@ -34,6 +37,73 @@ std::vector<int> g_registered_hotkeys;
 Renderer g_topbar_renderer;   // For topbar rendering
 Renderer* g_current_renderer = nullptr; // Points to currently active renderer
 HWND g_topbar_hwnd = NULL;
+
+#define WM_HYPRWIN_IPC (WM_USER + 500)
+
+struct IPCMessage {
+  const char* request;
+  std::string response;
+};
+
+LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  if (msg == WM_HYPRWIN_IPC) {
+    IPCMessage* ipcm = (IPCMessage*)lParam;
+    if (ipcm && g_lua) {
+      std::string req = ipcm->request;
+      sol::protected_function ipc_func = (*g_lua)["HyprWin"]["on_ipc_request"];
+      if (ipc_func.valid()) {
+        auto result = ipc_func(req);
+        if (result.valid()) {
+          ipcm->response = result.get<std::string>();
+        } else {
+          sol::error err = result;
+          ipcm->response = "LUA ERROR: " + std::string(err.what());
+        }
+      } else {
+        ipcm->response = "ERROR: HyprWin.on_ipc_request is not defined";
+      }
+    }
+    return 1;
+  }
+  return DefWindowProcA(hwnd, msg, wParam, lParam);
+}
+
+void IPCServerThread() {
+  while (true) {
+    HANDLE hPipe = CreateNamedPipeA(
+        "\\\\.\\pipe\\hyprwin",
+        PIPE_ACCESS_DUPLEX,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+        1,
+        1024, 1024, 0, NULL
+    );
+    if (hPipe == INVALID_HANDLE_VALUE) {
+      Sleep(1000);
+      continue;
+    }
+    if (ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED)) {
+      char buffer[2048] = {0};
+      DWORD bytesRead = 0;
+      if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL)) {
+        std::string req(buffer, bytesRead);
+        IPCMessage msg;
+        msg.request = req.c_str();
+        
+        if (g_overlay_hwnd) {
+          SendMessageA(g_overlay_hwnd, WM_HYPRWIN_IPC, 0, (LPARAM)&msg);
+        } else {
+          msg.response = "ERROR: Overlay window not ready";
+        }
+        
+        DWORD bytesWritten = 0;
+        WriteFile(hPipe, msg.response.c_str(), (DWORD)msg.response.size(), &bytesWritten, NULL);
+      }
+    }
+    DisconnectNamedPipe(hPipe);
+    CloseHandle(hPipe);
+  }
+}
+
 
 static FILETIME g_prev_idle_time = {0};
 static FILETIME g_prev_kernel_time = {0};
@@ -490,7 +560,7 @@ int main() {
     });
     WNDCLASSEXA wc = {sizeof(WNDCLASSEXA),
                       CS_HREDRAW | CS_VREDRAW,
-                      DefWindowProcA,
+                      OverlayWndProc,
                       0,
                       0,
                       GetModuleHandle(NULL),
@@ -618,6 +688,9 @@ int main() {
 
     std::cout << "HyprWin: Window hook registered. Monitoring windows..."
               << std::endl;
+
+    std::thread(IPCServerThread).detach();
+
 
     // Register hotkeys for Workspaces (Alt + 1..9) and moving windows (Alt + Shift + 1..9)
     for (int i = 1; i <= 9; ++i) {

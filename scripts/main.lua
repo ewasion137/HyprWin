@@ -1073,5 +1073,83 @@ HyprWin.on_alttab_action = function(action_type)
     alttab.action(action_type)
 end
 
+HyprWin.on_ipc_request = function(req)
+    log("IPC Request received: " .. tostring(req))
+    if not req or req == "" then return "ERROR: Empty command" end
+    
+    -- Trim whitespace
+    req = req:gsub("^%s*(.-)%s*$", "%1")
+    
+    local parts = {}
+    for part in string.gmatch(req, "[^%s]+") do
+        table.insert(parts, part)
+    end
+    
+    if #parts == 0 then return "ERROR: Empty command" end
+    
+    local cmd = parts[1]:lower()
+    
+    if cmd == "dispatch" then
+        local disp_name = parts[2]
+        if not disp_name then return "ERROR: Missing dispatcher name" end
+        
+        -- Join remaining arguments
+        local args = {}
+        for i = 3, #parts do
+            table.insert(args, parts[i])
+        end
+        local args_str = table.concat(args, " ")
+        
+        local success, err = pcall(function()
+            if disp_name == "workspace" then
+                hl.dsp.workspace(args_str)()
+            elseif disp_name == "movetoworkspace" then
+                hl.dsp.movetoworkspace(args_str)()
+            elseif disp_name == "exec" then
+                hl.dsp.exec_cmd(args_str)()
+            elseif disp_name == "togglefloating" then
+                hl.dsp.window.float()()
+            elseif disp_name == "fullscreen" then
+                hl.dsp.window.fullscreen()()
+            elseif disp_name == "killactive" then
+                hl.dsp.window.close()()
+            elseif disp_name == "movefocus" then
+                hl.dsp.focus({ direction = args_str:lower() })()
+            elseif disp_name == "swapwindow" then
+                hl.dsp.window.move({ direction = args_str:lower() })()
+            else
+                error("Unsupported dispatcher: " .. disp_name)
+            end
+        end)
+        
+        if success then
+            return "OK"
+        else
+            return "ERROR: " .. tostring(err)
+        end
+        
+    elseif cmd == "activewindow" then
+        local focused = HyprWin.focused_window
+        if not focused then return "None" end
+        local title = wm.get_window_title(focused)
+        local class = wm.get_class_name(focused)
+        return string.format("HWND: 0x%X\nClass: %s\nTitle: %s", focused, class, title)
+        
+    elseif cmd == "clients" then
+        local lines = {}
+        for _, hwnd in ipairs(HyprWin.windows) do
+            local title = wm.get_window_title(hwnd)
+            local class = wm.get_class_name(hwnd)
+            local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
+            local is_float = HyprWin.floating_windows[hwnd] and "floating" or "tiled"
+            table.insert(lines, string.format("0x%X -> Workspace %s (%s) [%s]: %s", hwnd, ws, is_float, class, title))
+        end
+        return table.concat(lines, "\n")
+        
+    else
+        return "ERROR: Unknown command: " .. cmd
+    end
+end
+
 HyprWin.windows = filtered
 HyprWin.retile()
