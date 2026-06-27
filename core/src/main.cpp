@@ -281,6 +281,14 @@ int main() {
       return (size_t)GetForegroundWindow();
     });
 
+    wm.set_function("is_maximized", [](size_t hwnd) {
+      return (bool)IsZoomed((HWND)hwnd);
+    });
+
+    wm.set_function("maximize_window", [](size_t hwnd, bool state) {
+      ShowWindow((HWND)hwnd, state ? SW_MAXIMIZE : SW_RESTORE);
+    });
+
     wm.set_function("get_cpu_usage", []() {
       return GetCPUUsage();
     });
