@@ -13,6 +13,7 @@
 #include <windows.h>
 #include <filesystem>
 #include <fstream>
+#include <windowsx.h>
 #include <shlobj.h>
 
 extern "C" {
@@ -30,9 +31,35 @@ HWND g_overlay_hwnd = NULL;
 namespace fs = std::filesystem;
 std::vector<int> g_registered_hotkeys;
 
+Renderer g_renderer;          // For window borders (overlay)
+Renderer g_topbar_renderer;   // For topbar rendering
+Renderer* g_current_renderer = nullptr; // Points to currently active renderer
+
+HWND g_overlay_hwnd = NULL;
+HWND g_topbar_hwnd = NULL;
+
 static FILETIME g_prev_idle_time = {0};
 static FILETIME g_prev_kernel_time = {0};
 static FILETIME g_prev_user_time = {0};
+
+LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  if (msg == WM_LBUTTONDOWN) {
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+    
+    if (g_lua) {
+      sol::protected_function click_func = (*g_lua)["HyprWin"]["on_click"];
+      if (click_func.valid()) {
+        auto result = click_func(x, y);
+        if (!result.valid()) {
+          sol::error err = result;
+          std::cerr << "!!! LUA CLICK ERROR: " << err.what() << std::endl;
+        }
+      }
+    }
+  }
+  return DefWindowProcA(hwnd, msg, wParam, lParam);
+}
 
 double GetCPUUsage() {
   FILETIME idleTime, kernelTime, userTime;
