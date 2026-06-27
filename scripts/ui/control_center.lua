@@ -66,9 +66,18 @@ function cc.draw(dt)
 
     -- Power Buttons
     local px = x + 20
-    local py = y + h - 50
-    ui.draw_text("\u{E7E8} Power Off", px, py, 11, 0.9, 0.3, 0.3, anim_val, t.font_family)
-    ui.draw_text("\u{E777} Reboot", px + 120, py, 11, 1, 1, 1, anim_val, t.font_family)
+    local py = y + h - 55
+    local p_btn_w, p_btn_h = 130, 32
+    
+    -- Power Off Button (accented with danger red)
+    ui.fill_rounded_rect(px, py, p_btn_w, p_btn_h, 6, t.accent_danger[1], t.accent_danger[2], t.accent_danger[3], 0.2 * anim_val)
+    ui.draw_rounded_rect(px, py, p_btn_w, p_btn_h, 6, t.accent_danger[1], t.accent_danger[2], t.accent_danger[3], 0.4 * anim_val, 1)
+    ui.draw_text("\u{E7E8} Power Off", px + 22, py + 9, 10, t.accent_danger[1], t.accent_danger[2], t.accent_danger[3], anim_val, t.font_family)
+    
+    -- Reboot Button (accented with subtle dark gray)
+    ui.fill_rounded_rect(px + p_btn_w + 20, py, p_btn_w, p_btn_h, 6, 0.2, 0.2, 0.2, 0.5 * anim_val)
+    ui.draw_rounded_rect(px + p_btn_w + 20, py, p_btn_w, p_btn_h, 6, t.border_color[1], t.border_color[2], t.border_color[3], 0.6 * anim_val, 1)
+    ui.draw_text("\u{E777} Reboot", px + p_btn_w + 35, py + 9, 10, t.text_color[1], t.text_color[2], t.text_color[3], anim_val, t.font_family)
 end
 
 return cc

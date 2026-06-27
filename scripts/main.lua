@@ -1026,13 +1026,19 @@ HyprWin.on_click = function(x, y)
             end
 
             -- Power Off (Left bottom)
-            if lx >= 20 and lx <= 120 and ly >= cc_h - 55 and ly <= cc_h - 30 then
+            local py = cc_h - 55
+            local p_btn_h = 32
+
+            -- Precise Power Off click bounds (lx: 20..150, ly: 345..377)
+            if lx >= 20 and lx <= 150 and ly >= py and ly <= py + p_btn_h then
+                log("Power Button: Shutting down system...")
                 wm.spawn("shutdown /s /t 0")
                 return
             end
 
-            -- Reboot (Right bottom)
-            if lx >= 140 and lx <= 240 and ly >= cc_h - 55 and ly <= cc_h - 30 then
+            -- Precise Reboot click bounds (lx: 170..300, ly: 345..377)
+            if lx >= 170 and lx <= 300 and ly >= py and ly <= py + p_btn_h then
+                log("Power Button: Rebooting system...")
                 wm.spawn("shutdown /r /t 0")
                 return
             end
