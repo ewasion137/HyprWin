@@ -46,21 +46,23 @@ function cc.draw(dt)
         ui.draw_text(label, bx + 35, by + 15, 11, text_r, text_g, text_b, anim_val, t.font_family)
     end
 
-    draw_btn("Wi-Fi", "\u{E701}", x + 20, y + 20, true)
-    draw_btn("Bluetooth", "\u{E702}", x + 30 + btn_w, y + 20, false)
-    draw_btn("Night Light", "\u{E975}", x + 20, y + 75, true)
-    draw_btn("Focus", "\u{E10F}", x + 30 + btn_w, y + 75, false)
+    local state = HyprWin.cc_state
+    
+    draw_btn("Wi-Fi", "\u{E701}", x + 20, y + 20, state.wifi)
+    draw_btn("Bluetooth", "\u{E702}", x + 30 + btn_w, y + 20, state.bluetooth)
+    draw_btn("Night Light", "\u{E975}", x + 20, y + 75, state.nightlight)
+    draw_btn("Focus", "\u{E10F}", x + 30 + btn_w, y + 75, state.focus)
 
     -- Слайдеры (Громкость / Яркость)
-    local function draw_slider(label, icon, sy)
+    local function draw_slider(label, icon, sy, pct)
         ui.draw_text(label, x + 20, sy, 10, t.text_dim[1], t.text_dim[2], t.text_dim[3], anim_val, t.font_family)
         ui.fill_rounded_rect(x + 20, sy + 15, w - 40, 6, 3, 0.1, 0.1, 0.1, 0.8 * anim_val)
-        ui.fill_rounded_rect(x + 20, sy + 15, (w - 40) * 0.7, 6, 3, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1.0 * anim_val)
-        ui.fill_rounded_rect(x + 20 + (w-40)*0.7 - 5, sy + 13, 10, 10, 5, 1, 1, 1, anim_val)
+        ui.fill_rounded_rect(x + 20, sy + 15, (w - 40) * pct, 6, 3, t.accent_color[1], t.accent_color[2], t.accent_color[3], 1.0 * anim_val)
+        ui.fill_rounded_rect(x + 20 + (w-40)*pct - 5, sy + 13, 10, 10, 5, 1, 1, 1, anim_val)
     end
 
-    draw_slider("Volume", "\u{E767}", y + 150)
-    draw_slider("Brightness", "\u{E706}", y + 210)
+    draw_slider("Volume", "\u{E767}", y + 150, state.volume)
+    draw_slider("Brightness", "\u{E706}", y + 210, state.brightness)
 
     -- Power Buttons
     local px = x + 20
