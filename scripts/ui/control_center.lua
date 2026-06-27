@@ -26,10 +26,22 @@ function cc.draw(dt)
     -- Сетка кнопок (Quick Settings)
     local btn_w, btn_h = (w - 60) / 2, 45
     local function draw_btn(label, icon, bx, by, active)
-        local col = active and t.accent_color or {0.2, 0.2, 0.2, 0.5}
-        ui.fill_rounded_rect(bx, by, btn_w, btn_h, 8, col[1], col[2], col[3], col[4] * anim_val)
-        ui.draw_text(icon, bx + 12, by + 14, 12, 1, 1, 1, anim_val, t.icon_font_family)
-        ui.draw_text(label, bx + 35, by + 15, 11, 1, 1, 1, anim_val, t.font_family)
+        local bg = active and t.accent_color or {0.2, 0.2, 0.2, 0.5}
+        
+        -- Default text is white
+        local text_r, text_g, text_b = 1.0, 1.0, 1.0
+        
+        -- Smart brightness calculation (0.299R + 0.587G + 0.114B)
+        if active then
+            local brightness = (bg[1] * 0.299) + (bg[2] * 0.587) + (bg[3] * 0.114)
+            if brightness > 0.6 then
+                text_r, text_g, text_b = 0.05, 0.05, 0.05 -- Use dark text for light backgrounds
+            end
+        end
+
+        ui.fill_rounded_rect(bx, by, btn_w, btn_h, 8, bg[1], bg[2], bg[3], bg[4] * anim_val)
+        ui.draw_text(icon, bx + 12, by + 14, 12, text_r, text_g, text_b, anim_val, t.icon_font_family)
+        ui.draw_text(label, bx + 35, by + 15, 11, text_r, text_g, text_b, anim_val, t.font_family)
     end
 
     draw_btn("Wi-Fi", "\u{E701}", x + 20, y + 20, true)

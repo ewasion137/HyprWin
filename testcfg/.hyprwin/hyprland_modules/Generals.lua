@@ -7,6 +7,10 @@ HyprWin.apps = {
     { name = "Power Off",         path = "shutdown /s /t 0" }
 }
 
+hl.bind("ALT + S", function() 
+    require("control_center").toggle() 
+end)
+
 hl.config({
   general = {
     gaps_in  = 5,

@@ -811,6 +811,16 @@ end
 
 -- Fallback hotkey registration for legacy hardcoded bindings
 HyprWin.on_hotkey = function(id)
+    -- Сначала проверяем, есть ли такой кастомный бинд из hl_shim
+    if HyprWin.custom_hotkeys and HyprWin.custom_hotkeys[id] then
+        local callback = HyprWin.custom_hotkeys[id]
+        if type(callback) == "function" then
+            callback()
+        end
+        return
+    end
+
+    -- Если кастомного нет, пускаем по дефолтной цепочке
     if id >= 101 and id <= 109 then
         local target_ws = id - 100
         switch_workspace(target_ws)

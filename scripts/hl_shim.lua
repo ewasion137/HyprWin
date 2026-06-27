@@ -6,7 +6,8 @@ local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
 
-local keybind_callbacks = {}
+HyprWin.custom_hotkeys = HyprWin.custom_hotkeys or {}
+HyprWin.custom_hotkey_counter = HyprWin.custom_hotkey_counter or 0
 
 -- Global storage for active layout rules and curve engines
 HyprWin.window_rules = { float = {}, rules_list = {} }
@@ -320,14 +321,8 @@ hl.bind = function(combo, action, opts)
     local mod, vk = parse_key_combo(combo)
     if vk == 0 then return end
 
-    local id = #keybind_callbacks + 1000
-    keybind_callbacks[id] = action
+    HyprWin.custom_hotkey_counter = HyprWin.custom_hotkey_counter + 1
+    local id = HyprWin.custom_hotkey_counter + 1000
+    HyprWin.custom_hotkeys[id] = action
     wm.register_hotkey(id, mod, vk)
-end
-
-HyprWin.on_hotkey = function(id)
-    local callback = keybind_callbacks[id]
-    if callback and type(callback) == "function" then
-        callback()
-    end
 end
