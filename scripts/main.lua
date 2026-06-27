@@ -953,83 +953,95 @@ HyprWin.on_hotkey = function(id)
     end
 end
 
+HyprWin.cc_state = HyprWin.cc_state or {
+    wifi = true,
+    bluetooth = false,
+    nightlight = false,
+    focus = false,
+    volume = 0.7,
+    brightness = 0.7
+}
+
 HyprWin.on_click = function(x, y)
     local sw, _ = wm.get_screen_size()
     local t = HyprWin.theme
     
-    -- --- 1. КЛИКИ ВНУТРИ CONTROL CENTER (Если он открыт) ---
+    -- --- 1. CONTROL CENTER INTERACTION ---
     if HyprWin.cc_active then
         local cc_w, cc_h = 320, 400
         local cc_x = sw - cc_w - 16
-        local cc_y = t.bar_height + 15 -- Начало CC по высоте (~45)
+        local cc_y = t.bar_height + 15 -- CC Top Y bound (~45)
 
         if x >= cc_x and x <= cc_x + cc_w and y >= cc_y and y <= cc_y + cc_h then
-            -- Переводим координаты в локальные относительно верхнего левого угла CC
             local lx = x - cc_x
             local ly = y - cc_y
-
             local btn_w, btn_h = (cc_w - 60) / 2, 45
 
-            -- Кнопка Wi-Fi (lx: 20..20+btn_w, ly: 20..20+btn_h)
+            -- Wi-Fi button toggle
             if lx >= 20 and lx <= 20 + btn_w and ly >= 20 and ly <= 20 + btn_h then
-                log("CC Click: Wi-Fi toggled!")
-                -- Сюда потом прикрутим нативный вызов
+                HyprWin.cc_state.wifi = not HyprWin.cc_state.wifi
+                -- Silent powershell command to toggle all wireless adapters natively
+                wm.spawn("powershell -WindowStyle Hidden -Command \"Get-NetAdapter | Where-Object { $_.PhysicalMediaType -eq 'Native 802.11' } | ForEach-Object { if ($_.Status -eq 'Up') { Disable-NetAdapter -Name $_.Name -Confirm:$false } else { Enable-NetAdapter -Name $_.Name -Confirm:$false } }\"")
                 return
             end
 
-            -- Кнопка Bluetooth
+            -- Bluetooth button toggle
             if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 20 and ly <= 20 + btn_h then
-                log("CC Click: Bluetooth toggled!")
+                HyprWin.cc_state.bluetooth = not HyprWin.cc_state.bluetooth
+                -- Modern UWP Radio API call from silent powershell
+                wm.spawn("powershell -WindowStyle Hidden -Command \"Add-Type -AssemblyName System.Runtime.WindowsRuntime; $as = [Windows.Devices.Radios.Radio, Windows.Devices.Radios, ContentType=WindowsRuntime]; $radios = [Windows.Devices.Radios.Radio]::GetRadiosAsync() | ForEach-Object { $_.GetAwaiter().GetResult() }; $bt = $radios | Where-Object { $_.Kind -eq 'Bluetooth' }; if ($bt) { if ($bt.State -eq 'On') { $bt.SetStateAsync('Off') } else { $bt.SetStateAsync('On') } }\"")
                 return
             end
 
-            -- Кнопка Night Light
+            -- Night Light settings spawn
             if lx >= 20 and lx <= 20 + btn_w and ly >= 75 and ly <= 75 + btn_h then
-                log("CC Click: Night Light toggled!")
+                HyprWin.cc_state.nightlight = not HyprWin.cc_state.nightlight
+                wm.spawn("cmd.exe /c start ms-settings:nightlight")
                 return
             end
 
-            -- Кнопка Focus
+            -- Focus Assist settings spawn
             if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 75 and ly <= 75 + btn_h then
-                log("CC Click: Focus toggled!")
+                HyprWin.cc_state.focus = not HyprWin.cc_state.focus
+                wm.spawn("cmd.exe /c start ms-settings:focusassist")
                 return
             end
 
-            -- Слайдер Volume (y: 150..185)
+            -- Volume Slider drag simulation (using native keystroke emulation)
             if ly >= 150 and ly <= 185 then
                 local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
-                log("CC Click: Volume set to " .. math.floor(pct * 100) .. "%")
-                -- Сюда добавим нативное управление звуком
+                HyprWin.cc_state.volume = pct
+                local vol_steps = math.floor(pct * 50)
+                -- Mute then send exact percentage steps of volume-up key
+                wm.spawn("powershell -WindowStyle Hidden -Command \"$wsh = New-Object -ComObject Wscript.Shell; for ($i=0; $i -lt 50; $i++) { $wsh.SendKeys([char]174) }; for ($i=0; $i -lt " .. vol_steps .. "; $i++) { $wsh.SendKeys([char]175) }\"")
                 return
             end
 
-            -- Слайдер Brightness (y: 210..245)
+            -- Brightness Slider calculation using native WMI
             if ly >= 210 and ly <= 245 then
                 local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
-                log("CC Click: Brightness set to " .. math.floor(pct * 100) .. "%")
+                HyprWin.cc_state.brightness = pct
+                wm.spawn("powershell -WindowStyle Hidden -Command \"(Get-WmiObject -Namespace root\\wmi -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, " .. math.floor(pct * 100) .. ")\"")
                 return
             end
 
-            -- Кнопка Power Off (Слева внизу)
+            -- Power Off (Left bottom)
             if lx >= 20 and lx <= 120 and ly >= cc_h - 55 and ly <= cc_h - 30 then
-                log("CC Click: Shutting down system...")
                 wm.spawn("shutdown /s /t 0")
                 return
             end
 
-            -- Кнопка Reboot (Справа внизу)
+            -- Reboot (Right bottom)
             if lx >= 140 and lx <= 240 and ly >= cc_h - 55 and ly <= cc_h - 30 then
-                log("CC Click: Rebooting system...")
                 wm.spawn("shutdown /r /t 0")
                 return
             end
 
-            return -- Поглощаем любые другие клики внутри коробки CC
+            return -- Absorb other click events inside the CC box
         end
     end
 
-    -- --- 2. КЛИКИ ПО САМОМУ ТОПБАРУ ---
-    -- Координата шестеренки (Control Center)
+    -- --- 2. TOPBAR INTERACTION ---
     local trigger_x = sw - 16 - 25
     local trigger_y = 8
     
@@ -1038,7 +1050,7 @@ HyprWin.on_click = function(x, y)
         return
     end
     
-    -- Клик по воркспейсам
+    -- Workspace buttons clicks
     local bar_x = 16
     local WS_OFFSET_X = 45
     local WS_SPACING  = 30
