@@ -961,6 +961,7 @@ HyprWin.on_click = function(x, y)
             return
         end
     end
+end
 
 HyprWin.on_alttab_action = function(action_type)
     alttab.action(action_type)
