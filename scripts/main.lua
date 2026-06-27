@@ -936,6 +936,32 @@ HyprWin.on_hotkey = function(id)
     end
 end
 
+HyprWin.on_click = function(x, y)
+    local sw, _ = wm.get_screen_size()
+    local t = HyprWin.theme
+    
+    -- Координата кнопки Control Center (Gear icon)
+    local trigger_x = sw - 16 - 25
+    local trigger_y = 8
+    
+    -- Если кликнули в районе иконки шестеренки (24x24 пикселя)
+    if x >= trigger_x - 10 and x <= trigger_x + 30 and y >= trigger_y and y <= trigger_y + 30 then
+        require("control_center").toggle()
+        return
+    end
+    
+    -- Проверка кликов по воркспейсам
+    local bar_x = 16
+    local WS_OFFSET_X = 45
+    local WS_SPACING  = 30
+    for i = 1, 7 do
+        local wx = bar_x + WS_OFFSET_X + (i - 1) * WS_SPACING
+        if x >= wx - 5 and x <= wx + 25 then
+            HyprWin.switch_workspace(i)
+            return
+        end
+    end
+
 HyprWin.on_alttab_action = function(action_type)
     alttab.action(action_type)
 end
