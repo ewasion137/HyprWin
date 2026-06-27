@@ -940,17 +940,88 @@ HyprWin.on_click = function(x, y)
     local sw, _ = wm.get_screen_size()
     local t = HyprWin.theme
     
-    -- Координата кнопки Control Center (Gear icon)
+    -- --- 1. КЛИКИ ВНУТРИ CONTROL CENTER (Если он открыт) ---
+    if HyprWin.cc_active then
+        local cc_w, cc_h = 320, 400
+        local cc_x = sw - cc_w - 16
+        local cc_y = t.bar_height + 15 -- Начало CC по высоте (~45)
+
+        if x >= cc_x and x <= cc_x + cc_w and y >= cc_y and y <= cc_y + cc_h then
+            -- Переводим координаты в локальные относительно верхнего левого угла CC
+            local lx = x - cc_x
+            local ly = y - cc_y
+
+            local btn_w, btn_h = (cc_w - 60) / 2, 45
+
+            -- Кнопка Wi-Fi (lx: 20..20+btn_w, ly: 20..20+btn_h)
+            if lx >= 20 and lx <= 20 + btn_w and ly >= 20 and ly <= 20 + btn_h then
+                log("CC Click: Wi-Fi toggled!")
+                -- Сюда потом прикрутим нативный вызов
+                return
+            end
+
+            -- Кнопка Bluetooth
+            if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 20 and ly <= 20 + btn_h then
+                log("CC Click: Bluetooth toggled!")
+                return
+            end
+
+            -- Кнопка Night Light
+            if lx >= 20 and lx <= 20 + btn_w and ly >= 75 and ly <= 75 + btn_h then
+                log("CC Click: Night Light toggled!")
+                return
+            end
+
+            -- Кнопка Focus
+            if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 75 and ly <= 75 + btn_h then
+                log("CC Click: Focus toggled!")
+                return
+            end
+
+            -- Слайдер Volume (y: 150..185)
+            if ly >= 150 and ly <= 185 then
+                local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
+                log("CC Click: Volume set to " .. math.floor(pct * 100) .. "%")
+                -- Сюда добавим нативное управление звуком
+                return
+            end
+
+            -- Слайдер Brightness (y: 210..245)
+            if ly >= 210 and ly <= 245 then
+                local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
+                log("CC Click: Brightness set to " .. math.floor(pct * 100) .. "%")
+                return
+            end
+
+            -- Кнопка Power Off (Слева внизу)
+            if lx >= 20 and lx <= 120 and ly >= cc_h - 55 and ly <= cc_h - 30 then
+                log("CC Click: Shutting down system...")
+                wm.spawn("shutdown /s /t 0")
+                return
+            end
+
+            -- Кнопка Reboot (Справа внизу)
+            if lx >= 140 and lx <= 240 and ly >= cc_h - 55 and ly <= cc_h - 30 then
+                log("CC Click: Rebooting system...")
+                wm.spawn("shutdown /r /t 0")
+                return
+            end
+
+            return -- Поглощаем любые другие клики внутри коробки CC
+        end
+    end
+
+    -- --- 2. КЛИКИ ПО САМОМУ ТОПБАРУ ---
+    -- Координата шестеренки (Control Center)
     local trigger_x = sw - 16 - 25
     local trigger_y = 8
     
-    -- Если кликнули в районе иконки шестеренки (24x24 пикселя)
     if x >= trigger_x - 10 and x <= trigger_x + 30 and y >= trigger_y and y <= trigger_y + 30 then
         require("control_center").toggle()
         return
     end
     
-    -- Проверка кликов по воркспейсам
+    -- Клик по воркспейсам
     local bar_x = 16
     local WS_OFFSET_X = 45
     local WS_SPACING  = 30
