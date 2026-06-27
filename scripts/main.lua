@@ -797,8 +797,25 @@ end
 
 function swap_direction(dir)
     local focused = HyprWin.focused_window
+    if not focused then return end
+
+    -- If focused window is floating, slide it physically instead of swapping
+    if HyprWin.floating_windows[focused] then
+        local x, y, w, h = wm.get_window_rect(focused)
+        local step = 50
+        if dir == "left" then x = x - step
+        elseif dir == "right" then x = x + step
+        elseif dir == "up" then y = y - step
+        elseif dir == "down" then y = y + step
+        end
+        wm.move_window(focused, x, y, w, h)
+        HyprWin.floating_rects[focused] = { x, y, w, h }
+        HyprWin.window_rects[focused] = { x, y, w, h }
+        return
+    end
+
     local target  = find_neighbor(dir)
-    if not focused or not target then return end
+    if not target then return end
 
     local idx1, idx2 = nil, nil
     for i, hwnd in ipairs(HyprWin.windows) do
