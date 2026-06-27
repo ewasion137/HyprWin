@@ -838,10 +838,26 @@ HyprWin.on_hotkey = function(id)
         local focused = HyprWin.focused_window
         if focused then
             if HyprWin.floating_windows[focused] then
+                -- Возвращаем в тайлинг
                 HyprWin.floating_windows[focused] = nil
                 HyprWin.sticky_windows[focused] = nil
             else
+                -- Переводим во Float
                 HyprWin.floating_windows[focused] = true
+                
+                -- Возвращаем окну его оригинальный размер до тайлинга (или дефолтный 1280x720)
+                local orig = HyprWin.original_rects[focused] or { 150, 150, 1280, 720 }
+                local sw, sh = wm.get_screen_size()
+                
+                local w = orig[3] or 1280
+                local h = orig[4] or 720
+                local x = math.floor((sw - w) / 2)
+                local y = math.floor((sh - h) / 2)
+                
+                -- Принудительно двигаем его в центр экрана
+                wm.move_window(focused, x, y, w, h)
+                HyprWin.floating_rects[focused] = { x, y, w, h }
+                HyprWin.window_rects[focused] = { x, y, w, h }
             end
             HyprWin.retile()
         end
