@@ -659,7 +659,7 @@ int main() {
         std::string cls(className);
 
         // Never hide overlay if foreground is the desktop background, system tray, or explorer folders
-        if (cls != "WorkerW" && cls != "Progman" && cls != "Shell_TrayWnd" && cls != "HyprWinOverlay" && cls != "CabinetWClass") {
+        if (cls != "WorkerW" && cls != "Progman" && cls != "Shell_TrayWnd" && cls != "HyprWinOverlay" && cls != "CabinetWClass" && cls != "XamlExplorerHostIslandWindow") {
           RECT rc;
           if (SUCCEEDED(DwmGetWindowAttribute(fg, DWMWA_EXTENDED_FRAME_BOUNDS, &rc, sizeof(rc)))) {
             int screen_w = GetSystemMetrics(SM_CXSCREEN);
