@@ -565,7 +565,7 @@ end
 
 local last_frame_time = nil
 
-HyprWin.on_render = function()
+HyprWin.on_render_overlay = function()
     local time = os.clock()
     local t = HyprWin.theme
     local sw, sh = wm.get_screen_size()
@@ -684,13 +684,6 @@ HyprWin.on_render = function()
         end
     end
 
-    -- Evaluate math Bezier curves for bar and launcher
-    local bar_y = update_animation("bar", 0)
-    local launcher_alpha = update_animation("launcher", HyprWin.launcher_active and 1 or 0)
-    
-    HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
-    HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
-
     -- Window Borders drawing directly bound to layout theme tokens
     for _, hwnd in ipairs(HyprWin.windows) do
         local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
@@ -731,9 +724,19 @@ HyprWin.on_render = function()
         end
     end
 
-    topbar.draw(HyprWin.ui_anims.bar_y)
     alttab.draw()
     launcher.draw(HyprWin.ui_anims.launcher_alpha)
+end
+
+HyprWin.on_render_topbar = function()
+    -- Evaluate math Bezier curves for bar and launcher
+    local bar_y = update_animation("bar", 0)
+    local launcher_alpha = update_animation("launcher", HyprWin.launcher_active and 1 or 0)
+    
+    HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
+    HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
+
+    topbar.draw(HyprWin.ui_anims.bar_y)
 end
 
 -- Initial scanning loop

@@ -31,11 +31,8 @@ HWND g_overlay_hwnd = NULL;
 namespace fs = std::filesystem;
 std::vector<int> g_registered_hotkeys;
 
-Renderer g_renderer;          // For window borders (overlay)
 Renderer g_topbar_renderer;   // For topbar rendering
 Renderer* g_current_renderer = nullptr; // Points to currently active renderer
-
-HWND g_overlay_hwnd = NULL;
 HWND g_topbar_hwnd = NULL;
 
 static FILETIME g_prev_idle_time = {0};
@@ -494,7 +491,37 @@ int main() {
     // Set transparency and click-through
     SetWindowPos(overlay_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-    // --- FIXED CODE END ---
+
+    // ==========================================
+    // --- ШАГ 5: СОЗДАНИЕ КЛИКАБЕЛЬНОГО ТОПБАРА ---
+    // ==========================================
+    WNDCLASSEXA wc_top = wc;
+    wc_top.lpszClassName = "HyprWinTopbar";
+    wc_top.lpfnWndProc = TopbarWndProc; // Наш клик-обработчик из Шага Б
+    RegisterClassExA(&wc_top);
+
+    // Высота 46 пикселей (30px сам бар + 8px маргин сверху + 8px запас снизу)
+    int topbar_height = 46; 
+    HWND topbar_hwnd = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_LAYERED, "HyprWinTopbar", // БЕЗ WS_EX_TRANSPARENT!
+        "Topbar", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
+        topbar_height, NULL, NULL, wc.hInstance, NULL);
+
+    g_topbar_hwnd = topbar_hwnd;
+
+    // Настраиваем прозрачность окна
+    SetLayeredWindowAttributes(topbar_hwnd, 0, 255, LWA_ALPHA);
+    DwmExtendFrameIntoClientArea(topbar_hwnd, &margins);
+
+    // Инициализируем рендерер под новое окно топбара
+    if (!g_topbar_renderer.init(topbar_hwnd)) {
+      std::cerr << "HyprWin: Failed to initialize Topbar Renderer!" << std::endl;
+      return -1;
+    }
+
+    // Показываем окно топбара, но без перехвата фокуса (чтобы не сбивать активные окна)
+    ShowWindow(topbar_hwnd, SW_SHOWNOACTIVATE);
+    // ==========================================
 
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
@@ -646,10 +673,37 @@ int main() {
 
       // Trigger Lua rendering only if overlay is visible to save GPU resources
       if (IsWindowVisible(g_overlay_hwnd)) {
-        sol::protected_function render_func = lua["ui"]["render"];
-        if (render_func.valid()) {
-          render_func();
+        g_current_renderer = &g_renderer;
+        g_renderer.begin_draw();
+        g_renderer.clear(0, 0, 0, 0);
+
+        sol::protected_function render_overlay = lua["HyprWin"]["on_render_overlay"];
+        if (render_overlay.valid()) {
+          auto result = render_overlay();
+          if (!result.valid()) {
+            sol::error err = result;
+            std::cerr << "!!! LUA OVERLAY RENDER ERROR: " << err.what() << std::endl;
+          }
         }
+
+        g_renderer.end_draw();
+      }
+
+      if (IsWindowVisible(g_topbar_hwnd)) {
+        g_current_renderer = &g_topbar_renderer;
+        g_topbar_renderer.begin_draw();
+        g_topbar_renderer.clear(0, 0, 0, 0);
+
+        sol::protected_function render_topbar = lua["HyprWin"]["on_render_topbar"];
+        if (render_topbar.valid()) {
+          auto result = render_topbar();
+          if (!result.valid()) {
+            sol::error err = result;
+            std::cerr << "!!! LUA TOPBAR RENDER ERROR: " << err.what() << std::endl;
+          }
+        }
+
+        g_topbar_renderer.end_draw();
       }
     }
 
