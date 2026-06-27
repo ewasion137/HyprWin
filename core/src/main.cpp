@@ -416,6 +416,26 @@ int main() {
     wm.set_function("is_minimized",
                     [](size_t hwnd) { return (bool)IsIconic((HWND)hwnd); });
 
+     wm.set_function("set_cc_active", [](bool active) {
+      if (g_topbar_hwnd) {
+        int sw = GetSystemMetrics(SM_CXSCREEN);
+        HRGN hRgnBar = CreateRectRgn(0, 0, sw, 46);
+        if (active) {
+          int cc_x = sw - 320 - 16;
+          HRGN hRgnCC = CreateRectRgn(cc_x, 46, cc_x + 320, 446);
+          HRGN hRgnCombined = CreateRectRgn(0, 0, 0, 0);
+          
+          CombineRgn(hRgnCombined, hRgnBar, hRgnCC, RGN_OR);
+          SetWindowRgn(g_topbar_hwnd, hRgnCombined, TRUE);
+          
+          DeleteObject(hRgnBar);
+          DeleteObject(hRgnCC);
+        } else {
+          SetWindowRgn(g_topbar_hwnd, hRgnBar, TRUE);
+        }
+      }
+    });
+
     wm.set_function("enumerate_windows", []() {
       std::vector<size_t> hwnds;
       EnumWindows(
