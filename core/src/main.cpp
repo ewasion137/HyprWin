@@ -40,10 +40,18 @@ static FILETIME g_prev_kernel_time = {0};
 static FILETIME g_prev_user_time = {0};
 
 LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  if (msg == WM_SETCURSOR) {
+    SetCursor(LoadCursor(NULL, IDC_ARROW));
+    return TRUE;
+  }
+
   if (msg == WM_LBUTTONDOWN) {
     int x = GET_X_LPARAM(lParam);
     int y = GET_Y_LPARAM(lParam);
     
+    // Этот принт покажет в консоли, долетел ли физический клик мыши до окна
+    std::cout << "[C++ Topbar] Mouse click caught at X: " << x << " | Y: " << y << std::endl;
+
     if (g_lua) {
       sol::protected_function click_func = (*g_lua)["HyprWin"]["on_click"];
       if (click_func.valid()) {
