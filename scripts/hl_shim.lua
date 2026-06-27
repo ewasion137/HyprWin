@@ -245,8 +245,15 @@ hl.dsp = {
             return function()
                 local focused = HyprWin.focused_window
                 if focused then
-                    HyprWin.fullscreen_windows[focused] = not HyprWin.fullscreen_windows[focused]
-                    HyprWin.retile()
+                    if HyprWin.floating_windows[focused] then
+                        -- Для флоат окон дергаем нативный Win32 Maximize/Restore
+                        local is_max = wm.is_maximized(focused)
+                        wm.maximize_window(focused, not is_max)
+                    else
+                        -- Для тайлинг окон используем внутренний фуллскрин WM
+                        HyprWin.fullscreen_windows[focused] = not HyprWin.fullscreen_windows[focused]
+                        HyprWin.retile()
+                    end
                 end
             end
         end,

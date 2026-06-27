@@ -517,7 +517,7 @@ int main() {
     RegisterClassExA(&wc_top);
 
     // Высота 46 пикселей (30px сам бар + 8px маргин сверху + 8px запас снизу)
-    int topbar_height = 46; 
+    int topbar_height = 500;
     HWND topbar_hwnd = CreateWindowExA(
         WS_EX_TOPMOST | WS_EX_LAYERED, "HyprWinTopbar", // БЕЗ WS_EX_TRANSPARENT!
         "Topbar", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
