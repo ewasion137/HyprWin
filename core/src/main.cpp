@@ -529,6 +529,10 @@ int main() {
 
     // Показываем окно топбара, но без перехвата фокуса (чтобы не сбивать активные окна)
     ShowWindow(topbar_hwnd, SW_SHOWNOACTIVATE);
+
+    // Вытаскиваем топбар на самый верх Z-стопки, чтобы полноэкранный оверлей не воровал клики!
+    SetWindowPos(topbar_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     // ==========================================
 
     char buffer[MAX_PATH];
