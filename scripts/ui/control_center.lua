@@ -46,7 +46,14 @@ function cc.draw(dt)
         ui.draw_text(label, bx + 35, by + 15, 11, text_r, text_g, text_b, anim_val, t.font_family)
     end
 
-    local state = HyprWin.cc_state
+    local state = HyprWin.cc_state or {
+        wifi = true,
+        bluetooth = false,
+        nightlight = false,
+        focus = false,
+        volume = 0.7,
+        brightness = 0.7
+    }
     
     draw_btn("Wi-Fi", "\u{E701}", x + 20, y + 20, state.wifi)
     draw_btn("Bluetooth", "\u{E702}", x + 30 + btn_w, y + 20, state.bluetooth)
