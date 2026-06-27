@@ -45,32 +45,6 @@ LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     return TRUE;
   }
 
-  // Нативный Hit-Testing: разделяем зоны клика и прозрачности
-  if (msg == WM_NCHITTEST) {
-    POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-    ScreenToClient(hwnd, &pt);
-
-    bool inside_topbar = (pt.y >= 0 && pt.y <= 46); // Зона самого топбара
-    bool inside_cc = false;
-
-    if (g_lua) {
-      sol::optional<bool> cc_active = (*g_lua)["HyprWin"]["cc_active"];
-      if (cc_active.has_value() && cc_active.value()) {
-        int sw = GetSystemMetrics(SM_CXSCREEN);
-        int cc_x = sw - 320 - 16;
-        int cc_y = 46; // Сразу под топбаром
-        
-        // Попадаем ли в габариты Control Center (320x400)
-        inside_cc = (pt.x >= cc_x && pt.x <= (cc_x + 320) && pt.y >= cc_y && pt.y <= (cc_y + 400));
-      }
-    }
-
-    if (inside_topbar || inside_cc) {
-      return HTCLIENT; // Ловим мышь, область кликабельна
-    }
-    return HTTRANSPARENT; // Мышь проваливается сквозь прозрачную зону
-  }
-
   if (msg == WM_LBUTTONDOWN) {
     int x = GET_X_LPARAM(lParam);
     int y = GET_Y_LPARAM(lParam);
@@ -90,6 +64,7 @@ LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
   }
   return DefWindowProcA(hwnd, msg, wParam, lParam);
 }
+
 
 double GetCPUUsage() {
   FILETIME idleTime, kernelTime, userTime;
