@@ -429,46 +429,31 @@ int main() {
     ui.set_function("draw_rect",
                     [](float x, float y, float w, float h, float r, float g,
                        float b, float a, float thickness) {
-                      g_renderer.draw_rect(x, y, w, h, r, g, b, a, thickness);
+                      if (g_current_renderer) g_current_renderer->draw_rect(x, y, w, h, r, g, b, a, thickness);
                     });
     ui.set_function("fill_rect", [](float x, float y, float w, float h, float r,
                                     float g, float b, float a) {
-      g_renderer.fill_rect(x, y, w, h, r, g, b, a);
+      if (g_current_renderer) g_current_renderer->fill_rect(x, y, w, h, r, g, b, a);
     });
 
     ui.set_function("draw_rounded_rect", [](float x, float y, float w, float h, float rad, float r, float g, float b, float a, float thick) {
-        g_renderer.draw_rounded_rect(x, y, w, h, rad, r, g, b, a, thick);
+      if (g_current_renderer) g_current_renderer->draw_rounded_rect(x, y, w, h, rad, r, g, b, a, thick);
     });
 
     ui.set_function("fill_rounded_rect", [](float x, float y, float w, float h, float rad, float r, float g, float b, float a) {
-        g_renderer.fill_rounded_rect(x, y, w, h, rad, r, g, b, a);
+      if (g_current_renderer) g_current_renderer->fill_rounded_rect(x, y, w, h, rad, r, g, b, a);
     });
     ui.set_function("draw_text", [](std::string text, float x, float y, float size,
                                     float r, float g, float b, float a, std::string font) {
-      g_renderer.draw_text(text, x, y, size, r, g, b, a, font);
+      if (g_current_renderer) g_current_renderer->draw_text(text, x, y, size, r, g, b, a, font);
     });
 
-    // Returns pixel width of a string — useful for right-aligning text in Lua
     ui.set_function("measure_text", [](std::string text, float size, std::string font) {
-      return g_renderer.measure_text_width(text, size, font);
+      if (g_current_renderer) return g_current_renderer->measure_text_width(text, size, font);
+      return 0.0f;
     });
     ui.set_function("render", []() {
-      g_renderer.begin_draw();
-      g_renderer.clear(0, 0, 0, 0); // Transparent background
-
-      // Call a Lua function to handle frame drawing with full error catching
-      if (g_lua) {
-        sol::protected_function draw_func = (*g_lua)["HyprWin"]["on_render"];
-        if (draw_func.valid()) {
-          auto result = draw_func();
-          if (!result.valid()) {
-            sol::error err = result;
-            std::cerr << "!!! LUA RENDER ERROR: " << err.what() << std::endl;
-          }
-        }
-      }
-
-      g_renderer.end_draw();
+      // This is now empty or deprecated because we split renders
     });
     WNDCLASSEXA wc = {sizeof(WNDCLASSEXA),
                       CS_HREDRAW | CS_VREDRAW,
