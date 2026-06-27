@@ -4,6 +4,8 @@ local anim_val = 0
 
 function cc.toggle()
     HyprWin.cc_active = not HyprWin.cc_active
+    -- Нативно меняем физические границы окна топбара
+    wm.set_cc_active(HyprWin.cc_active)
 end
 
 function cc.draw(dt)

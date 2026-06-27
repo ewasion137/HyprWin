@@ -561,7 +561,10 @@ int main() {
     // Вытаскиваем топбар на самый верх Z-стопки, чтобы полноэкранный оверлей не воровал клики!
     SetWindowPos(topbar_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-    // ==========================================
+
+    int sw_screen = GetSystemMetrics(SM_CXSCREEN);
+    HRGN hRgnStart = CreateRectRgn(0, 0, sw_screen, 46);
+    SetWindowRgn(topbar_hwnd, hRgnStart, TRUE);
 
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
