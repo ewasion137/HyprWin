@@ -410,6 +410,20 @@ int main() {
         SetFocus(handle);
       }
     });
+    wm.set_function("set_window_opacity", [](size_t hwnd, double opacity) {
+      HWND handle = (HWND)hwnd;
+      LONG ex_style = GetWindowLong(handle, GWL_EXSTYLE);
+      
+      // На лету вешаем стиль LAYERED, если его нет у стороннего окна
+      if (!(ex_style & WS_EX_LAYERED)) {
+        SetWindowLong(handle, GWL_EXSTYLE, ex_style | WS_EX_LAYERED);
+        SetWindowPos(handle, NULL, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+      }
+      
+      BYTE alpha = (BYTE)(opacity * 255.0);
+      SetLayeredWindowAttributes(handle, 0, alpha, LWA_ALPHA);
+    });
 
     wm.set_function("force_enable_resize", [](size_t hwnd) {
       HWND handle = (HWND)hwnd;
