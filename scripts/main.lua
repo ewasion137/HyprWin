@@ -57,7 +57,9 @@ local ignored_classes = {
 
 -- Safe window tracking filter function
 function should_ignore(hwnd, title, class)
-    if title == "" and class == "" then return true end
+    -- Намертво отсекаем фантомные окна без заголовков (Chromium tooltips, CapCut overlays, etc)
+    if not title or title:trim() == "" then return true end
+    
     for _, ic in ipairs(ignored_classes) do
         if class == ic then return true end
     end
