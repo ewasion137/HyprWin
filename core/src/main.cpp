@@ -239,6 +239,10 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
 
   if (event == 0x800B || event == 0x800A)
     return;
+  HWND toplevel_hwnd = GetAncestor(hwnd, GA_ROOT);
+  if (toplevel_hwnd != NULL) {
+    hwnd = toplevel_hwnd;
+  }
   // Bypass visibility/toplevel checks for destroy, hide, and minimize events
   // since the window is no longer fully valid/visible at this stage, but we
   // still need to untrack it.
@@ -792,14 +796,12 @@ int main() {
 
       if (is_fullscreen) {
         if (IsWindowVisible(g_overlay_hwnd)) {
-          char className[256] = {0};
-          GetClassNameA(fg, className, sizeof(className));
-          std::cout << "[Fullscreen Detect] Hiding overlay. Active window class: " << className << std::endl;
+          // УДАЛИ СТРОКУ С ВЫВОДОМ [Fullscreen Detect] Hiding overlay...
           ShowWindow(g_overlay_hwnd, SW_HIDE);
         }
       } else {
         if (!IsWindowVisible(g_overlay_hwnd)) {
-          std::cout << "[Fullscreen Detect] Restoring overlay visibility." << std::endl;
+          // УДАЛИ СТРОКУ С ВЫВОДОМ [Fullscreen Detect] Restoring overlay...
           ShowWindow(g_overlay_hwnd, SW_SHOWNOACTIVATE);
         }
       }
