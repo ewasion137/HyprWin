@@ -368,6 +368,23 @@ local function apply_window_rules(hwnd, title, class)
     end
 end
 
+HyprWin.update_opacities = function()
+    local t = HyprWin.theme
+    if not t.active_opacity or not t.inactive_opacity then return end
+    
+    for _, hwnd in ipairs(HyprWin.windows) do
+        local class = wm.get_class_name(hwnd)
+        -- Пропускаем наши системные окна оверлея и топбара, чтобы случайно их не загасить
+        if class ~= "HyprWinOverlay" and class ~= "HyprWinTopbar" then
+            if hwnd == HyprWin.focused_window then
+                wm.set_window_opacity(hwnd, t.active_opacity)
+            else
+                wm.set_window_opacity(hwnd, t.inactive_opacity)
+            end
+        end
+    end
+end
+
 HyprWin.retile = function()
     if is_retiling then return end
     is_retiling = true
@@ -500,6 +517,7 @@ HyprWin.retile = function()
             end
             layout_workspace(HyprWin.current_workspace, 0, 0)
         end
+        HyprWin.update_opacities()
     end)
 
     is_retiling = false
@@ -1147,8 +1165,38 @@ HyprWin.on_ipc_request = function(req)
             table.insert(lines, string.format("0x%X -> Workspace %s (%s) [%s]: %s", hwnd, ws, is_float, class, title))
         end
         return table.concat(lines, "\n")
-        
-    else
+    elseif disp_name == "setprop" then
+            -- Ожидаемый формат: dispatch setprop <activewindow/HWND> <property> <value>
+            -- Пример: dispatch setprop activewindow opacity 0.8
+            local target_win = parts[3]
+            local prop = parts[4]
+            local val = parts[5]
+            
+            if not target_win or not prop or not val then
+                return "ERROR: Usage: dispatch setprop <activewindow/HWND> <property> <value>"
+            end
+            
+            local hwnd = nil
+            if target_win:lower() == "activewindow" then
+                hwnd = HyprWin.focused_window
+            else
+                hwnd = tonumber(target_win) or tonumber(target_win, 16)
+            end
+            
+            if not hwnd then return "ERROR: Invalid window reference" end
+            
+            if prop:lower() == "opacity" then
+                local opacity_val = tonumber(val)
+                if not opacity_val or opacity_val < 0.1 or opacity_val > 1.0 then
+                    return "ERROR: Opacity must be between 0.1 and 1.0"
+                end
+                -- Меняем прозрачность конкретного окна на лету
+                wm.set_window_opacity(hwnd, opacity_val)
+                return "OK"
+            else
+                return "ERROR: Unsupported property: " .. prop
+            end
+        else
         return "ERROR: Unknown command: " .. cmd
     end
 end
