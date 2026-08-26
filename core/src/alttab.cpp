@@ -23,18 +23,24 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         g_alttab_active = true;
 
         if (g_lua) {
-          // ИСПРАВЛЕНО: защищаем доступ к g_lua
-          std::lock_guard<std::mutex> lock(g_lua_mutex);
+          try {
+            // ИСПРАВЛЕНО: защищаем доступ к g_lua
+            std::lock_guard<std::mutex> lock(g_lua_mutex);
 
-          sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
-          if (alttab_func.valid()) {
-            // Check if Shift is also held down for reverse cycling
-            bool shift_is_down = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            auto result = alttab_func(shift_is_down ? "prev" : "next");
-            if (!result.valid()) {
-              sol::error err = result;
-              std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
+            sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
+            if (alttab_func.valid()) {
+              // Check if Shift is also held down for reverse cycling
+              bool shift_is_down = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+              auto result = alttab_func(shift_is_down ? "prev" : "next");
+              if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
+              }
             }
+          } catch (const std::exception& e) {
+            std::cerr << "!!! ALTTAB EXCEPTION: " << e.what() << std::endl;
+          } catch (...) {
+            std::cerr << "!!! ALTTAB UNKNOWN EXCEPTION" << std::endl;
           }
         }
         return 1; // Block default Windows Alt+Tab dialog from appearing
@@ -47,16 +53,22 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         g_alttab_active = false;
 
         if (g_lua) {
-          // ИСПРАВЛЕНО: защищаем доступ к g_lua
-          std::lock_guard<std::mutex> lock(g_lua_mutex);
+          try {
+            // ИСПРАВЛЕНО: защищаем доступ к g_lua
+            std::lock_guard<std::mutex> lock(g_lua_mutex);
 
-          sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
-          if (alttab_func.valid()) {
-            auto result = alttab_func("commit");
-            if (!result.valid()) {
-              sol::error err = result;
-              std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
+            sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
+            if (alttab_func.valid()) {
+              auto result = alttab_func("commit");
+              if (!result.valid()) {
+                sol::error err = result;
+                std::cerr << "!!! LUA ALTTAB ERROR: " << err.what() << std::endl;
+              }
             }
+          } catch (const std::exception& e) {
+            std::cerr << "!!! ALTTAB COMMIT EXCEPTION: " << e.what() << std::endl;
+          } catch (...) {
+            std::cerr << "!!! ALTTAB COMMIT UNKNOWN EXCEPTION" << std::endl;
           }
         }
       }
