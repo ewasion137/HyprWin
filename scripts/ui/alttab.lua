@@ -16,7 +16,8 @@ function alttab.action(action_type)
             HyprWin.alttab_windows = {}
             for _, hwnd in ipairs(HyprWin.windows) do
                 local ws = HyprWin.window_workspaces[hwnd] or HyprWin.current_workspace
-                if ws == HyprWin.current_workspace then
+                -- ИСПРАВЛЕНО: проверяем валидность окна перед добавлением
+                if ws == HyprWin.current_workspace and is_valid(hwnd) then
                     table.insert(HyprWin.alttab_windows, hwnd)
                 end
             end
@@ -38,8 +39,13 @@ function alttab.action(action_type)
         end
     elseif action_type == "commit" then
         if HyprWin.alttab_active then
-            local target = HyprWin.alttab_windows[HyprWin.alttab_index]
-            if target and is_valid(target) then wm.focus_window(target) end
+            -- ИСПРАВЛЕНО: безопасная проверка границ массива
+            if HyprWin.alttab_index >= 1 and HyprWin.alttab_index <= #HyprWin.alttab_windows then
+                local target = HyprWin.alttab_windows[HyprWin.alttab_index]
+                if target and is_valid(target) then
+                    wm.focus_window(target)
+                end
+            end
             HyprWin.alttab_active = false
             HyprWin.alttab_windows = {}
         end
@@ -71,6 +77,12 @@ function alttab.draw()
 
     for i = 1, count do
         local hwnd = HyprWin.alttab_windows[i]
+
+        -- ИСПРАВЛЕНО: проверяем валидность окна перед отрисовкой
+        if not hwnd or not is_valid(hwnd) then
+            goto continue
+        end
+
         local item_x = start_x + (i - 1) * (item_w + gap_x)
         local item_y = modal_y + padding
         local is_selected = (i == HyprWin.alttab_index)
@@ -128,6 +140,8 @@ function alttab.draw()
         else
             ui.draw_text(label, lx, ly, 10, t.text_dim[1], t.text_dim[2], t.text_dim[3], t.text_dim[4], t.font_family)
         end
+
+        ::continue::
     end
 end
 

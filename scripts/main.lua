@@ -1028,9 +1028,11 @@ HyprWin.on_hotkey = function(id)
         if focused then
             if HyprWin.sticky_windows[focused] then
                 HyprWin.sticky_windows[focused] = nil
+                log("Window 0x" .. string.format("%X", focused) .. " is now UNSTICKY")
             else
                 HyprWin.sticky_windows[focused] = true
                 HyprWin.floating_windows[focused] = true
+                log("Window 0x" .. string.format("%X", focused) .. " is now STICKY (visible on all workspaces)")
             end
             HyprWin.retile()
         end
