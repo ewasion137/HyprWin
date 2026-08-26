@@ -1,8 +1,10 @@
 #include "../include/alttab.hpp"
 #include <sol/sol.hpp>
 #include <iostream>
+#include <mutex>
 
 extern sol::state *g_lua; // Declared in main.cpp
+extern std::mutex g_lua_mutex; // ИСПРАВЛЕНО: используем мьютекс из main.cpp
 
 HHOOK g_keyboard_hook = NULL;
 bool g_alttab_active = false;
@@ -19,8 +21,11 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (p->vkCode == VK_TAB && alt_is_down) {
       if (wParam == WM_SYSKEYDOWN || wParam == WM_KEYDOWN) {
         g_alttab_active = true;
-        
+
         if (g_lua) {
+          // ИСПРАВЛЕНО: защищаем доступ к g_lua
+          std::lock_guard<std::mutex> lock(g_lua_mutex);
+
           sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
           if (alttab_func.valid()) {
             // Check if Shift is also held down for reverse cycling
@@ -42,6 +47,9 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         g_alttab_active = false;
 
         if (g_lua) {
+          // ИСПРАВЛЕНО: защищаем доступ к g_lua
+          std::lock_guard<std::mutex> lock(g_lua_mutex);
+
           sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
           if (alttab_func.valid()) {
             auto result = alttab_func("commit");

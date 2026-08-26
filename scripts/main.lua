@@ -86,9 +86,7 @@ if not success then
     log("CONFIG ERROR: " .. tostring(err))
 end
 
-function string.trim(s)
-    return s:match("^%s*(.-)%s*$")
-end
+-- string.trim уже определен выше на строке 47-49, убираем дубликат
 
 local function is_valid(hwnd)
     return wm.is_window_visible(hwnd)
@@ -391,7 +389,12 @@ HyprWin.retile = function()
     if is_retiling then return end
     is_retiling = true
 
-    local success, err = pcall(function()
+    -- Защищаем от deadlock через xpcall с финализатором
+    local function cleanup()
+        is_retiling = false
+    end
+
+    local success, err = xpcall(function()
         local valid_windows = {}
         for _, hwnd in ipairs(HyprWin.windows) do
             if wm.is_window_visible(hwnd) and not wm.is_topmost(hwnd) then
@@ -465,7 +468,7 @@ HyprWin.retile = function()
         local sw, sh = wm.get_screen_size()
         local t = HyprWin.theme
         local bar_h = t.bar_height + 5
-        
+
         local tx, ty = t.gaps_out, bar_h + t.gaps_out
         local tw, th = sw - (t.gaps_out * 2), sh - bar_h - (t.gaps_out * 2)
 
@@ -520,9 +523,10 @@ HyprWin.retile = function()
             layout_workspace(HyprWin.current_workspace, 0, 0)
         end
         HyprWin.update_opacities()
-    end)
+    end, debug.traceback)
 
-    is_retiling = false
+    cleanup()
+
     if not success then
         log("RETILING ERROR: " .. tostring(err))
     end
@@ -873,33 +877,6 @@ HyprWin.on_hotkey = function(id)
             HyprWin.window_workspaces[focused] = target_ws
             HyprWin.retile()
         end
-    elseif id == 301 then
-        local focused = HyprWin.focused_window
-        if focused then
-            if HyprWin.floating_windows[focused] then
-                -- Возвращаем в тайлинг
-                HyprWin.floating_windows[focused] = nil
-                HyprWin.sticky_windows[focused] = nil
-            else
-                -- Переводим во Float
-                HyprWin.floating_windows[focused] = true
-                
-                -- Возвращаем окну его оригинальный размер до тайлинга (или дефолтный 1280x720)
-                local orig = HyprWin.original_rects[focused] or { 150, 150, 1280, 720 }
-                local sw, sh = wm.get_screen_size()
-                
-                local w = orig[3] or 1280
-                local h = orig[4] or 720
-                local x = math.floor((sw - w) / 2)
-                local y = math.floor((sh - h) / 2)
-                
-                -- Принудительно двигаем его в центр экрана
-                wm.move_window(focused, x, y, w, h)
-                HyprWin.floating_rects[focused] = { x, y, w, h }
-                HyprWin.window_rects[focused] = { x, y, w, h }
-            end
-            HyprWin.retile()
-        end
     elseif id == 302 then
         local focused = HyprWin.focused_window
         if focused then
@@ -1167,38 +1144,39 @@ HyprWin.on_ipc_request = function(req)
             table.insert(lines, string.format("0x%X -> Workspace %s (%s) [%s]: %s", hwnd, ws, is_float, class, title))
         end
         return table.concat(lines, "\n")
-    elseif disp_name == "setprop" then
-            -- Ожидаемый формат: dispatch setprop <activewindow/HWND> <property> <value>
-            -- Пример: dispatch setprop activewindow opacity 0.8
-            local target_win = parts[3]
-            local prop = parts[4]
-            local val = parts[5]
-            
-            if not target_win or not prop or not val then
-                return "ERROR: Usage: dispatch setprop <activewindow/HWND> <property> <value>"
-            end
-            
-            local hwnd = nil
-            if target_win:lower() == "activewindow" then
-                hwnd = HyprWin.focused_window
-            else
-                hwnd = tonumber(target_win) or tonumber(target_win, 16)
-            end
-            
-            if not hwnd then return "ERROR: Invalid window reference" end
-            
-            if prop:lower() == "opacity" then
-                local opacity_val = tonumber(val)
-                if not opacity_val or opacity_val < 0.1 or opacity_val > 1.0 then
-                    return "ERROR: Opacity must be between 0.1 and 1.0"
-                end
-                -- Меняем прозрачность конкретного окна на лету
-                wm.set_window_opacity(hwnd, opacity_val)
-                return "OK"
-            else
-                return "ERROR: Unsupported property: " .. prop
-            end
+
+    elseif cmd == "setprop" then
+        -- Ожидаемый формат: setprop <activewindow/HWND> <property> <value>
+        -- Пример: setprop activewindow opacity 0.8
+        local target_win = parts[2]
+        local prop = parts[3]
+        local val = parts[4]
+
+        if not target_win or not prop or not val then
+            return "ERROR: Usage: setprop <activewindow/HWND> <property> <value>"
+        end
+
+        local hwnd = nil
+        if target_win:lower() == "activewindow" then
+            hwnd = HyprWin.focused_window
         else
+            hwnd = tonumber(target_win) or tonumber(target_win, 16)
+        end
+
+        if not hwnd then return "ERROR: Invalid window reference" end
+
+        if prop:lower() == "opacity" then
+            local opacity_val = tonumber(val)
+            if not opacity_val or opacity_val < 0.1 or opacity_val > 1.0 then
+                return "ERROR: Opacity must be between 0.1 and 1.0"
+            end
+            -- Меняем прозрачность конкретного окна на лету
+            wm.set_window_opacity(hwnd, opacity_val)
+            return "OK"
+        else
+            return "ERROR: Unsupported property: " .. prop
+        end
+    else
         return "ERROR: Unknown command: " .. cmd
     end
 end

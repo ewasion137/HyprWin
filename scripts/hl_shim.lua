@@ -236,7 +236,15 @@ hl.dsp = {
             return function()
                 local focused = HyprWin.focused_window
                 if focused then
-                    HyprWin.floating_windows[focused] = not HyprWin.floating_windows[focused]
+                    -- ИСПРАВЛЕНО: корректная логика toggle с удалением из таблицы
+                    if HyprWin.floating_windows[focused] then
+                        HyprWin.floating_windows[focused] = nil
+                    else
+                        HyprWin.floating_windows[focused] = true
+                        -- Сохраняем текущую позицию как floating rect
+                        local x, y, w, h = wm.get_window_rect(focused)
+                        HyprWin.floating_rects[focused] = { x, y, w, h }
+                    end
                     HyprWin.retile()
                 end
             end

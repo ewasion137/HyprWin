@@ -15,15 +15,22 @@ Renderer::~Renderer() {
 }
 
 bool Renderer::init(HWND hwnd) {
-  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory);
-  
-  // Create shared DirectWrite factory
-  DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)&writeFactory);
+  // ИСПРАВЛЕНО: проверяем HRESULT для D2D1CreateFactory
+  HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory);
+  if (FAILED(hr)) {
+    return false;
+  }
+
+  // ИСПРАВЛЕНО: проверяем HRESULT для DWriteCreateFactory
+  hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)&writeFactory);
+  if (FAILED(hr)) {
+    return false;
+  }
 
   RECT rc;
   GetClientRect(hwnd, &rc);
 
-  HRESULT hr = factory->CreateHwndRenderTarget(
+  hr = factory->CreateHwndRenderTarget(
       D2D1::RenderTargetProperties(
           D2D1_RENDER_TARGET_TYPE_DEFAULT,
           D2D1::PixelFormat(
@@ -140,6 +147,7 @@ float Renderer::measure_text_width(const std::string& text, float size, const st
 
 // Internal helper: reuse the single brush by changing its color instead of re-creating it
 void Renderer::set_brush_color(float r, float g, float b, float a) {
+  if (!target) return; // ИСПРАВЛЕНО: проверяем target перед созданием brush
   if (!brush) {
     target->CreateSolidColorBrush(D2D1::ColorF(r, g, b, a), &brush);
   } else {

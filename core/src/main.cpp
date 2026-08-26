@@ -26,9 +26,11 @@ extern "C" {
 }
 
 #include <sol/sol.hpp> // Move this ABOVE the global pointer and callback
+#include <mutex> // ИСПРАВЛЕНО: добавляем мьютекс для thread-safety
 
 // Now types are known to the compiler
 sol::state *g_lua = nullptr;
+std::mutex g_lua_mutex; // ИСПРАВЛЕНО: мьютекс для защиты доступа к g_lua
 Renderer g_renderer;
 HWND g_overlay_hwnd = NULL;
 namespace fs = std::filesystem;
@@ -50,6 +52,10 @@ LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     IPCMessage* ipcm = (IPCMessage*)lParam;
     if (ipcm && g_lua) {
       std::string req = ipcm->request;
+
+      // ИСПРАВЛЕНО: блокируем доступ к g_lua мьютексом
+      std::lock_guard<std::mutex> lock(g_lua_mutex);
+
       sol::protected_function ipc_func = (*g_lua)["HyprWin"]["on_ipc_request"];
       if (ipc_func.valid()) {
         auto result = ipc_func(req);
@@ -85,16 +91,20 @@ void IPCServerThread() {
       char buffer[2048] = {0};
       DWORD bytesRead = 0;
       if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL)) {
-        std::string req(buffer, bytesRead);
+        // ИСПРАВЛЕНО: копируем строку в динамическую память, чтобы она жила до обработки
+        std::string* req_ptr = new std::string(buffer, bytesRead);
         IPCMessage msg;
-        msg.request = req.c_str();
-        
+        msg.request = req_ptr->c_str();
+
         if (g_overlay_hwnd) {
           SendMessageA(g_overlay_hwnd, WM_HYPRWIN_IPC, 0, (LPARAM)&msg);
         } else {
           msg.response = "ERROR: Overlay window not ready";
         }
-        
+
+        // Освобождаем динамическую память после обработки
+        delete req_ptr;
+
         DWORD bytesWritten = 0;
         WriteFile(hPipe, msg.response.c_str(), (DWORD)msg.response.size(), &bytesWritten, NULL);
       }
@@ -118,10 +128,13 @@ LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
   if (msg == WM_LBUTTONDOWN) {
     int x = GET_X_LPARAM(lParam);
     int y = GET_Y_LPARAM(lParam);
-    
+
     std::cout << "[C++ Topbar] Mouse click caught at X: " << x << " | Y: " << y << std::endl;
 
     if (g_lua) {
+      // ИСПРАВЛЕНО: защищаем доступ к g_lua
+      std::lock_guard<std::mutex> lock(g_lua_mutex);
+
       sol::protected_function click_func = (*g_lua)["HyprWin"]["on_click"];
       if (click_func.valid()) {
         auto result = click_func(x, y);
@@ -265,6 +278,9 @@ void CALLBACK WinEventProc(HWINEVENTHOOK hWinEventHook, DWORD event, HWND hwnd,
               << " | Event: 0x" << std::hex << event << std::dec
               << " | Title: " << title << std::endl;
 
+    // ИСПРАВЛЕНО: защищаем доступ к g_lua
+    std::lock_guard<std::mutex> lock(g_lua_mutex);
+
     sol::protected_function dispatcher = (*g_lua)["HyprWin"]["dispatch_event"];
     if (dispatcher.valid()) {
       auto result = dispatcher(event, (size_t)hwnd, std::string(title));
@@ -316,8 +332,9 @@ int main() {
     g_lua = &lua;
 
     // Open standard libraries safely (including OS library for clocks/timers)
+    // ИСПРАВЛЕНО: добавлена библиотека debug для xpcall с debug.traceback
     lua.open_libraries(sol::lib::base, sol::lib::package, sol::lib::string,
-                       sol::lib::math, sol::lib::table, sol::lib::os, sol::lib::io);
+                       sol::lib::math, sol::lib::table, sol::lib::os, sol::lib::io, sol::lib::debug);
 
     // Bind a C++ function to Lua
     lua.set_function("log", [](std::string message) {
@@ -718,9 +735,8 @@ int main() {
       RegisterHotKey(NULL, 101 + (i - 1), MOD_ALT, '0' + i);
       RegisterHotKey(NULL, 201 + (i - 1), MOD_ALT | MOD_SHIFT, '0' + i);
     }
-    // Register Alt + F to toggle Floating state, and Alt + P to Pin (Sticky)
-    RegisterHotKey(NULL, 301, MOD_ALT, 'F');
-    RegisterHotKey(NULL, 302, MOD_ALT, 'P');
+    // ИСПРАВЛЕНО: убрана регистрация Alt+F (ID 301), теперь используется пользовательский bind
+    RegisterHotKey(NULL, 302, MOD_ALT, 'P'); // Alt + P to Pin (Sticky)
     RegisterHotKey(NULL, 303, MOD_ALT, 'T'); // Force Tile hotkey
     RegisterHotKey(NULL, 304, MOD_ALT, 'M'); // Fullscreen with topbar (Monocle)
     RegisterHotKey(NULL, 305, MOD_ALT, 'D'); // Spawn Launcher (Rofi-like)
@@ -756,6 +772,9 @@ int main() {
         if (msg.message == WM_HOTKEY) {
           int hotkey_id = (int)msg.wParam;
           if (g_lua) {
+            // ИСПРАВЛЕНО: защищаем доступ к g_lua
+            std::lock_guard<std::mutex> lock(g_lua_mutex);
+
             sol::protected_function on_hotkey = (*g_lua)["HyprWin"]["on_hotkey"];
             if (on_hotkey.valid()) {
               auto result = on_hotkey(hotkey_id);
@@ -812,12 +831,17 @@ int main() {
         g_renderer.begin_draw();
         g_renderer.clear(0, 0, 0, 0);
 
-        sol::protected_function render_overlay = lua["HyprWin"]["on_render_overlay"];
-        if (render_overlay.valid()) {
-          auto result = render_overlay();
-          if (!result.valid()) {
-            sol::error err = result;
-            std::cerr << "!!! LUA OVERLAY RENDER ERROR: " << err.what() << std::endl;
+        if (g_lua) {
+          // ИСПРАВЛЕНО: защищаем доступ к g_lua
+          std::lock_guard<std::mutex> lock(g_lua_mutex);
+
+          sol::protected_function render_overlay = lua["HyprWin"]["on_render_overlay"];
+          if (render_overlay.valid()) {
+            auto result = render_overlay();
+            if (!result.valid()) {
+              sol::error err = result;
+              std::cerr << "!!! LUA OVERLAY RENDER ERROR: " << err.what() << std::endl;
+            }
           }
         }
 
@@ -829,12 +853,17 @@ int main() {
         g_topbar_renderer.begin_draw();
         g_topbar_renderer.clear(0, 0, 0, 0);
 
-        sol::protected_function render_topbar = lua["HyprWin"]["on_render_topbar"];
-        if (render_topbar.valid()) {
-          auto result = render_topbar();
-          if (!result.valid()) {
-            sol::error err = result;
-            std::cerr << "!!! LUA TOPBAR RENDER ERROR: " << err.what() << std::endl;
+        if (g_lua) {
+          // ИСПРАВЛЕНО: защищаем доступ к g_lua
+          std::lock_guard<std::mutex> lock(g_lua_mutex);
+
+          sol::protected_function render_topbar = lua["HyprWin"]["on_render_topbar"];
+          if (render_topbar.valid()) {
+            auto result = render_topbar();
+            if (!result.valid()) {
+              sol::error err = result;
+              std::cerr << "!!! LUA TOPBAR RENDER ERROR: " << err.what() << std::endl;
+            }
           }
         }
 
@@ -848,7 +877,8 @@ int main() {
       UnregisterHotKey(NULL, id);
     }
     for (int i = 201; i <= 209; ++i) UnregisterHotKey(NULL, i);
-    for (int i = 301; i <= 306; ++i) UnregisterHotKey(NULL, i);
+    // ИСПРАВЛЕНО: ID 301 больше не регистрируется
+    for (int i = 302; i <= 306; ++i) UnregisterHotKey(NULL, i);
     for (int i = 401; i <= 404; ++i) UnregisterHotKey(NULL, i);
     for (int i = 501; i <= 504; ++i) UnregisterHotKey(NULL, i);
     for (int i = 601; i <= 604; ++i) UnregisterHotKey(NULL, i);
