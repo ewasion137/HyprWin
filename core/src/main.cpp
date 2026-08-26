@@ -46,7 +46,21 @@ struct IPCMessage {
   std::string response;
 };
 
+#define WM_HYPRWIN_IPC (WM_USER + 500)
+#define WM_HYPRWIN_ALTTAB (WM_USER + 501)
+
 LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+  if (msg == WM_HYPRWIN_ALTTAB) {
+    if (g_lua) {
+      std::lock_guard<std::mutex> lock(g_lua_mutex);
+      sol::protected_function alttab_func = (*g_lua)["HyprWin"]["on_alttab_action"];
+      if (alttab_func.valid()) {
+        const char* action = (wParam == 2) ? "commit" : ((wParam == 1) ? "prev" : "next");
+        alttab_func(action);
+      }
+    }
+    return 0;
+  }
   if (msg == WM_HYPRWIN_IPC) {
     IPCMessage* ipcm = (IPCMessage*)lParam;
     if (ipcm && g_lua) {
@@ -153,34 +167,37 @@ double GetCPUUsage() {
 }
 
 bool IsToplevelWindow(HWND hwnd) {
+  if (!IsWindow(hwnd)) return false;
+
   DWORD pid;
   GetWindowThreadProcessId(hwnd, &pid);
-  if (pid == GetCurrentProcessId())
-    return false;
+  if (pid == GetCurrentProcessId()) return false;
 
   long style = GetWindowLong(hwnd, GWL_STYLE);
   long ex_style = GetWindowLong(hwnd, GWL_EXSTYLE);
   HWND owner = GetWindow(hwnd, GW_OWNER);
 
-  // --- FIXED LOGIC START ---
-  // 1. If window is TOPMOST (PiP, Overlays) - IGNORE IT
-  if (ex_style & WS_EX_TOPMOST)
-    return false;
+  if (ex_style & WS_EX_TOPMOST) return false;
+  if (ex_style & WS_EX_TOOLWINDOW) return false;
 
-  // 2. Standard Top-Level requirements
-  bool isAppWindow = (ex_style & WS_EX_APPWINDOW);
+  // Detect borderless/fullscreen exclusive game windows to prevent HyprWin from forcing tiling
+  if ((style & WS_POPUP) && !(style & WS_CAPTION)) {
+    RECT rc;
+    GetWindowRect(hwnd, &rc);
+    int screen_w = GetSystemMetrics(SM_CXSCREEN);
+    int screen_h = GetSystemMetrics(SM_CYSCREEN);
+    if (rc.left <= 0 && rc.top <= 0 && rc.right >= screen_w && rc.bottom >= screen_h) {
+      return false; // Treat fullscreen game windows as untracked standalone
+    }
+  }
+
+  bool isAppWindow = (ex_style & WS_EX_APPWINDOW) != 0;
   bool isTopLevel = (style & WS_CAPTION) && (owner == NULL);
 
-  if (ex_style & WS_EX_TOOLWINDOW)
-    return false;
-  if (!isAppWindow && !isTopLevel)
-    return false;
-  // --- FIXED LOGIC END ---
+  if (!isAppWindow && !isTopLevel) return false;
 
   int cloaked = 0;
-  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked,
-                                      sizeof(cloaked))) &&
-      cloaked != 0) {
+  if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0) {
     return false;
   }
 
@@ -375,25 +392,20 @@ int main() {
 
     wm.set_function("focus_window", [](size_t hwnd) {
       HWND handle = (HWND)hwnd;
-      
-      // Auto-restore window if it was minimized
+      if (!IsWindow(handle)) return;
+
       if (IsIconic(handle)) {
         ShowWindow(handle, SW_RESTORE);
       } else {
         ShowWindow(handle, SW_SHOW);
       }
 
-      // 1. Temporarily disable the global foreground lock timeout
-      SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, (LPVOID)0, SPIF_SENDCHANGE);
-
-      // 2. Simulate a rapid ALT key tap to bypass Windows focus stealing protection
-      keybd_event(VK_MENU, 0, 0, 0);
-      keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
-
-      // 3. Thread attachment fallback to ensure keyboard input follows the window
       HWND fg = GetForegroundWindow();
       DWORD fgThread = GetWindowThreadProcessId(fg, NULL);
       DWORD currentThread = GetCurrentThreadId();
+
+      // Disable lock timeout
+      SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, (LPVOID)0, SPIF_SENDCHANGE);
 
       if (fgThread != currentThread && fgThread != 0) {
         AttachThreadInput(currentThread, fgThread, TRUE);

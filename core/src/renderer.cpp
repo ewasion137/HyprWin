@@ -1,41 +1,77 @@
 #include "../include/renderer.hpp"
+#include <unordered_map>
+
+// Cache for IDWriteTextFormat to prevent resource exhaustion crashes
+static std::unordered_map<std::wstring, IDWriteTextFormat*> g_font_cache;
 
 Renderer::Renderer() : factory(nullptr), target(nullptr), brush(nullptr), writeFactory(nullptr) {}
 
 Renderer::~Renderer() {
-  cleanup();
-}
+  for (auto& pair : g_font_cache) {
+    if (pair.second) {
+      pair.second->Release();
+    }
+  }
+  g_font_cache.clear();
 
-void Renderer::cleanup() {
-  if (brush) { brush->Release(); brush = nullptr; }
-  if (target) { target->Release(); target = nullptr; }
-  if (writeFactory) { writeFactory->Release(); writeFactory = nullptr; }
-  if (factory) { factory->Release(); factory = nullptr; }
+  if (brush) {
+    brush->Release();
+    brush = nullptr;
+  }
+  if (target) {
+    target->Release();
+    target = nullptr;
+  }
+  if (writeFactory) {
+    writeFactory->Release();
+    writeFactory = nullptr;
+  }
+  if (factory) {
+    factory->Release();
+    factory = nullptr;
+  }
 }
 
 bool Renderer::init(HWND hwnd) {
-  HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory);
-  if (FAILED(hr)) return false;
+  if (!IsWindow(hwnd)) {
+    return false;
+  }
 
-  hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&writeFactory));
-  if (FAILED(hr)) return false;
+  if (!factory) {
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &factory);
+    if (FAILED(hr)) return false;
+  }
 
-  return recreate_render_target(hwnd);
-}
-
-bool Renderer::recreate_render_target(HWND hwnd) {
-  if (brush) { brush->Release(); brush = nullptr; }
-  if (target) { target->Release(); target = nullptr; }
+  if (!writeFactory) {
+    HRESULT hr = DWriteCreateFactory(
+        DWRITE_FACTORY_TYPE_SHARED, 
+        __uuidof(IDWriteFactory), 
+        reinterpret_cast<IUnknown**>(&writeFactory)
+    );
+    if (FAILED(hr)) return false;
+  }
 
   RECT rc;
   GetClientRect(hwnd, &rc);
 
+  D2D1_SIZE_U size = D2D1::SizeU(
+      rc.right - rc.left > 0 ? rc.right - rc.left : 1,
+      rc.bottom - rc.top > 0 ? rc.bottom - rc.top : 1
+  );
+
+  if (target) {
+    target->Release();
+    target = nullptr;
+  }
+
   HRESULT hr = factory->CreateHwndRenderTarget(
       D2D1::RenderTargetProperties(
           D2D1_RENDER_TARGET_TYPE_DEFAULT,
-          D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
-      D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top)),
-      &target);
+          D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)
+      ),
+      D2D1::HwndRenderTargetProperties(hwnd, size, D2D1_PRESENT_OPTIONS_IMMEDIATELY),
+      &target
+  );
 
   return SUCCEEDED(hr);
 }
@@ -46,13 +82,17 @@ void Renderer::begin_draw() {
   }
 }
 
-bool Renderer::end_draw(HWND hwnd) {
-  if (!target) return false;
+void Renderer::end_draw() {
+  if (!target) return;
   HRESULT hr = target->EndDraw();
   if (hr == D2DERR_RECREATE_TARGET) {
-    return recreate_render_target(hwnd);
+    if (brush) {
+      brush->Release();
+      brush = nullptr;
+    }
+    target->Release();
+    target = nullptr;
   }
-  return SUCCEEDED(hr);
 }
 
 void Renderer::draw_rect(float x, float y, float w, float h, float r, float g, float b, float a, float thickness) {
@@ -90,58 +130,86 @@ static std::wstring utf8_to_wstring(const std::string& utf8) {
   return result;
 }
 
+static IDWriteTextFormat* get_cached_text_format(IDWriteFactory* writeFactory, const std::wstring& fontName, float size) {
+  if (!writeFactory) return nullptr;
+  std::wstring key = fontName + L"_" + std::to_wstring(size);
+  auto it = g_font_cache.find(key);
+  if (it != g_font_cache.end()) {
+    return it->second;
+  }
+
+  IDWriteTextFormat* format = nullptr;
+  HRESULT hr = writeFactory->CreateTextFormat(
+      fontName.c_str(),
+      nullptr,
+      DWRITE_FONT_WEIGHT_NORMAL,
+      DWRITE_FONT_STYLE_NORMAL,
+      DWRITE_FONT_STRETCH_NORMAL,
+      size,
+      L"",
+      &format
+  );
+
+  if (SUCCEEDED(hr) && format) {
+    g_font_cache[key] = format;
+    return format;
+  }
+  return nullptr;
+}
+
 void Renderer::draw_text(const std::string& text, float x, float y, float size, float r, float g, float b, float a, const std::string& fontName) {
   if (!target || !writeFactory || text.empty()) return;
 
-  IDWriteTextFormat* textFormat = nullptr;
-  std::wstring wfont = utf8_to_wstring(fontName.empty() ? "Segoe UI" : fontName);
+  std::wstring wfont = utf8_to_wstring(fontName);
   std::wstring wtext = utf8_to_wstring(text);
 
-  HRESULT hr = writeFactory->CreateTextFormat(
-      wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-      DWRITE_FONT_STRETCH_NORMAL, size, L"", &textFormat);
+  IDWriteTextFormat* textFormat = get_cached_text_format(writeFactory, wfont, size);
+  if (!textFormat) return;
 
-  if (SUCCEEDED(hr)) {
-    IDWriteTextLayout* textLayout = nullptr;
-    hr = writeFactory->CreateTextLayout(
-        wtext.c_str(), static_cast<UINT32>(wtext.length()), textFormat,
-        2000.0f, 500.0f, &textLayout);
+  IDWriteTextLayout* textLayout = nullptr;
+  HRESULT hr = writeFactory->CreateTextLayout(
+      wtext.c_str(),
+      static_cast<UINT32>(wtext.length()),
+      textFormat,
+      4000.0f,
+      1000.0f,
+      &textLayout
+  );
 
-    if (SUCCEEDED(hr)) {
-      set_brush_color(r, g, b, a);
-      target->DrawTextLayout(D2D1::Point2F(x, y), textLayout, brush);
-      textLayout->Release();
-    }
-    textFormat->Release();
+  if (SUCCEEDED(hr) && textLayout) {
+    set_brush_color(r, g, b, a);
+    target->DrawTextLayout(D2D1::Point2F(x, y), textLayout, brush);
+    textLayout->Release();
   }
 }
 
 float Renderer::measure_text_width(const std::string& text, float size, const std::string& fontName) {
   if (!writeFactory || text.empty()) return 0.0f;
 
-  IDWriteTextFormat* fmt = nullptr;
-  std::wstring wfont = utf8_to_wstring(fontName.empty() ? "Segoe UI" : fontName);
+  std::wstring wfont = utf8_to_wstring(fontName);
   std::wstring wtext = utf8_to_wstring(text);
 
-  HRESULT hr = writeFactory->CreateTextFormat(
-      wfont.c_str(), NULL, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-      DWRITE_FONT_STRETCH_NORMAL, size, L"", &fmt);
-
-  if (FAILED(hr)) return 0.0f;
+  IDWriteTextFormat* textFormat = get_cached_text_format(writeFactory, wfont, size);
+  if (!textFormat) return 0.0f;
 
   IDWriteTextLayout* layout = nullptr;
-  hr = writeFactory->CreateTextLayout(wtext.c_str(), static_cast<UINT32>(wtext.length()), fmt, 4000.0f, 500.0f, &layout);
+  HRESULT hr = writeFactory->CreateTextLayout(
+      wtext.c_str(),
+      static_cast<UINT32>(wtext.length()),
+      textFormat,
+      4000.0f,
+      1000.0f,
+      &layout
+  );
 
   float width = 0.0f;
-  if (SUCCEEDED(hr)) {
+  if (SUCCEEDED(hr) && layout) {
     DWRITE_TEXT_METRICS metrics = {};
     if (SUCCEEDED(layout->GetMetrics(&metrics))) {
       width = metrics.width;
     }
     layout->Release();
   }
-
-  fmt->Release();
   return width;
 }
 
