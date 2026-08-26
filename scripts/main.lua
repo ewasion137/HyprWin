@@ -5,11 +5,17 @@ HyprWin.current_workspace = 1
 HyprWin.window_workspaces = {} 
 HyprWin.floating_windows = {}  
 HyprWin.floating_rects = {}    
-HyprWin.sticky_windows = {}    
-HyprWin.fullscreen_windows = {} 
-HyprWin.workspace_ratios = {}  
+HyprWin.sticky_windows = {}
+HyprWin.fullscreen_windows = {}
+HyprWin.workspace_ratios = {}
 HyprWin.layout_mode = "bsp"
 HyprWin.anim_speed = 0.28
+
+-- НОВОЕ: Window groups (табы)
+HyprWin.window_groups = {}  -- { group_id = {hwnd1, hwnd2, ...} }
+HyprWin.window_to_group = {} -- { hwnd = group_id }
+HyprWin.active_in_group = {} -- { group_id = active_hwnd }
+HyprWin.next_group_id = 1
 
 -- Geometry caching and animations
 HyprWin.window_rects = {}
@@ -75,7 +81,7 @@ if user_dir then
     package.path = package.path .. ";" .. user_dir .. "?.lua;" .. user_dir .. "?/init.lua"
 end
 
-local topbar = require("topbar")
+-- УДАЛЕНО: больше не загружаем topbar и control_center
 local alttab = require("alttab")
 local launcher = require("launcher")
 local hl_shim = require("hl_shim")
@@ -721,6 +727,19 @@ HyprWin.on_render_overlay = function()
         end
 
         if (is_active_ws or is_sticky or in_transition) and not wm.is_minimized(hwnd) then
+            -- НОВОЕ: Проверяем, в группе ли окно и активно ли оно
+            local group_id = HyprWin.window_to_group[hwnd]
+            local is_active_in_group = true
+            if group_id then
+                is_active_in_group = (HyprWin.active_in_group[group_id] == hwnd)
+            end
+
+            -- Скрываем неактивные окна в группе
+            if group_id and not is_active_in_group then
+                wm.move_window(hwnd, -32000, -32000, 800, 600)
+                goto continue
+            end
+
             local x, y, w, h
             if HyprWin.floating_windows[hwnd] then
                 x, y, w, h = wm.get_window_rect(hwnd)
@@ -732,21 +751,50 @@ HyprWin.on_render_overlay = function()
                     x, y, w, h = wm.get_window_rect(hwnd)
                 end
             end
-            
+
             -- Only draw borders if window is visible on the screen bounds
             if x > -10000 and y > -10000 and x < sw and y < sh then
                 local act = t.active_border_color
                 local inact = t.border_color
+
+                -- НОВОЕ: Рисуем табы для групп
+                if group_id then
+                    local group = HyprWin.window_groups[group_id]
+                    if group and #group > 1 then
+                        -- Рисуем tab bar сверху окна
+                        local tab_height = 28
+                        ui.fill_rounded_rect(x, y - tab_height, w, tab_height, t.rounding, 0.1, 0.1, 0.12, 0.95)
+
+                        local tab_width = w / #group
+                        for i, tab_hwnd in ipairs(group) do
+                            local tab_x = x + (i - 1) * tab_width
+                            local is_active_tab = (tab_hwnd == hwnd)
+
+                            if is_active_tab then
+                                ui.fill_rect(tab_x, y - tab_height, tab_width, tab_height, act[1], act[2], act[3], 0.3)
+                            end
+
+                            local title = wm.get_window_title(tab_hwnd)
+                            if #title > 20 then title = title:sub(1, 17) .. "..." end
+
+                            local text_color = is_active_tab and act or t.text_dim
+                            ui.draw_text(title, tab_x + 8, y - tab_height + 6, 12, text_color[1], text_color[2], text_color[3], text_color[4], t.font_family)
+                        end
+                    end
+                end
+
                 if hwnd == HyprWin.focused_window then
                     local glow = 0.1 * math.sin(time * 5)
-                    ui.draw_rounded_rect(x-3, y-3, w+6, h+6, t.rounding + 4, act[1], act[2], act[3], 0.2 + glow, 8) 
-                    ui.draw_rounded_rect(x, y, w, h, t.rounding, act[1], act[2], act[3], act[4], t.border_size) 
+                    ui.draw_rounded_rect(x-3, y-3, w+6, h+6, t.rounding + 4, act[1], act[2], act[3], 0.2 + glow, 8)
+                    ui.draw_rounded_rect(x, y, w, h, t.rounding, act[1], act[2], act[3], act[4], t.border_size)
                 else
                     if inact and inact[4] > 0 then
-                        ui.draw_rounded_rect(x, y, w, h, t.rounding, inact[1], inact[2], inact[3], inact[4], t.border_size) 
+                        ui.draw_rounded_rect(x, y, w, h, t.rounding, inact[1], inact[2], inact[3], inact[4], t.border_size)
                     end
                 end
             end
+
+            ::continue::
         end
     end
 
@@ -754,16 +802,8 @@ HyprWin.on_render_overlay = function()
     launcher.draw(HyprWin.ui_anims.launcher_alpha)
 end
 
-HyprWin.on_render_topbar = function()
-    -- Evaluate math Bezier curves for bar and launcher
-    local bar_y = update_animation("bar", 0)
-    local launcher_alpha = update_animation("launcher", HyprWin.launcher_active and 1 or 0)
-    
-    HyprWin.ui_anims.bar_y = lerp(HyprWin.ui_anims.bar_y, 0, HyprWin.anim_speed)
-    HyprWin.ui_anims.launcher_alpha = lerp(HyprWin.ui_anims.launcher_alpha, HyprWin.launcher_active and 1 or 0, HyprWin.anim_speed)
-
-    topbar.draw(HyprWin.ui_anims.bar_y)
-end
+-- УДАЛЕНО: on_render_topbar больше не нужен
+-- УДАЛЕНО: on_click больше не нужен
 
 -- Initial scanning loop
 local existing = wm.enumerate_windows()
@@ -853,6 +893,112 @@ function swap_direction(dir)
         HyprWin.windows[idx1], HyprWin.windows[idx2] = HyprWin.windows[idx2], HyprWin.windows[idx1]
         HyprWin.retile()
     end
+end
+
+-- НОВОЕ: Window groups функции
+function create_group()
+    local focused = HyprWin.focused_window
+    if not focused then return end
+
+    local group_id = HyprWin.next_group_id
+    HyprWin.next_group_id = HyprWin.next_group_id + 1
+
+    HyprWin.window_groups[group_id] = { focused }
+    HyprWin.window_to_group[focused] = group_id
+    HyprWin.active_in_group[group_id] = focused
+
+    log("Created group " .. group_id .. " with window 0x" .. string.format("%X", focused))
+end
+
+function add_to_group()
+    local focused = HyprWin.focused_window
+    if not focused then return end
+
+    -- Найти соседнее окно, которое в группе
+    local neighbor = find_neighbor("left") or find_neighbor("right") or
+                     find_neighbor("up") or find_neighbor("down")
+
+    if not neighbor then return end
+
+    local group_id = HyprWin.window_to_group[neighbor]
+    if not group_id then
+        -- Создаём новую группу с соседом
+        group_id = HyprWin.next_group_id
+        HyprWin.next_group_id = HyprWin.next_group_id + 1
+        HyprWin.window_groups[group_id] = { neighbor }
+        HyprWin.window_to_group[neighbor] = group_id
+        HyprWin.active_in_group[group_id] = neighbor
+    end
+
+    -- Добавляем focused в группу
+    table.insert(HyprWin.window_groups[group_id], focused)
+    HyprWin.window_to_group[focused] = group_id
+
+    log("Added window 0x" .. string.format("%X", focused) .. " to group " .. group_id)
+    HyprWin.retile()
+end
+
+function cycle_group(direction)
+    local focused = HyprWin.focused_window
+    if not focused then return end
+
+    local group_id = HyprWin.window_to_group[focused]
+    if not group_id then return end
+
+    local group = HyprWin.window_groups[group_id]
+    if not group or #group <= 1 then return end
+
+    local current_idx = nil
+    for i, hwnd in ipairs(group) do
+        if hwnd == focused then
+            current_idx = i
+            break
+        end
+    end
+
+    if not current_idx then return end
+
+    local next_idx
+    if direction == "next" then
+        next_idx = (current_idx % #group) + 1
+    else
+        next_idx = current_idx - 1
+        if next_idx < 1 then next_idx = #group end
+    end
+
+    local next_hwnd = group[next_idx]
+    HyprWin.active_in_group[group_id] = next_hwnd
+    wm.focus_window(next_hwnd)
+    log("Cycled to window " .. next_idx .. " in group " .. group_id)
+end
+
+function remove_from_group()
+    local focused = HyprWin.focused_window
+    if not focused then return end
+
+    local group_id = HyprWin.window_to_group[focused]
+    if not group_id then return end
+
+    local group = HyprWin.window_groups[group_id]
+    for i, hwnd in ipairs(group) do
+        if hwnd == focused then
+            table.remove(group, i)
+            break
+        end
+    end
+
+    HyprWin.window_to_group[focused] = nil
+
+    -- Если группа пустая, удаляем её
+    if #group == 0 then
+        HyprWin.window_groups[group_id] = nil
+        HyprWin.active_in_group[group_id] = nil
+    elseif HyprWin.active_in_group[group_id] == focused then
+        HyprWin.active_in_group[group_id] = group[1]
+    end
+
+    log("Removed window 0x" .. string.format("%X", focused) .. " from group " .. group_id)
+    HyprWin.retile()
 end
 
 -- Fallback hotkey registration for legacy hardcoded bindings
@@ -961,112 +1107,7 @@ HyprWin.cc_state = HyprWin.cc_state or {
     brightness = 0.7
 }
 
-HyprWin.on_click = function(x, y)
-    local sw, _ = wm.get_screen_size()
-    local t = HyprWin.theme
-    
-    -- --- 1. CONTROL CENTER INTERACTION ---
-    if HyprWin.cc_active then
-        local cc_w, cc_h = 320, 400
-        local cc_x = sw - cc_w - 16
-        local cc_y = t.bar_height + 15 -- CC Top Y bound (~45)
-
-        if x >= cc_x and x <= cc_x + cc_w and y >= cc_y and y <= cc_y + cc_h then
-            local lx = x - cc_x
-            local ly = y - cc_y
-            local btn_w, btn_h = (cc_w - 60) / 2, 45
-
-            -- Wi-Fi button toggle
-            if lx >= 20 and lx <= 20 + btn_w and ly >= 20 and ly <= 20 + btn_h then
-                HyprWin.cc_state.wifi = not HyprWin.cc_state.wifi
-                -- Silent powershell command to toggle all wireless adapters natively
-                wm.spawn("powershell -WindowStyle Hidden -Command \"Get-NetAdapter | Where-Object { $_.PhysicalMediaType -eq 'Native 802.11' } | ForEach-Object { if ($_.Status -eq 'Up') { Disable-NetAdapter -Name $_.Name -Confirm:$false } else { Enable-NetAdapter -Name $_.Name -Confirm:$false } }\"")
-                return
-            end
-
-            -- Bluetooth button toggle
-            if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 20 and ly <= 20 + btn_h then
-                HyprWin.cc_state.bluetooth = not HyprWin.cc_state.bluetooth
-                -- Modern UWP Radio API call from silent powershell
-                wm.spawn("powershell -WindowStyle Hidden -Command \"Add-Type -AssemblyName System.Runtime.WindowsRuntime; $as = [Windows.Devices.Radios.Radio, Windows.Devices.Radios, ContentType=WindowsRuntime]; $radios = [Windows.Devices.Radios.Radio]::GetRadiosAsync() | ForEach-Object { $_.GetAwaiter().GetResult() }; $bt = $radios | Where-Object { $_.Kind -eq 'Bluetooth' }; if ($bt) { if ($bt.State -eq 'On') { $bt.SetStateAsync('Off') } else { $bt.SetStateAsync('On') } }\"")
-                return
-            end
-
-            -- Night Light settings spawn
-            if lx >= 20 and lx <= 20 + btn_w and ly >= 75 and ly <= 75 + btn_h then
-                HyprWin.cc_state.nightlight = not HyprWin.cc_state.nightlight
-                wm.spawn("cmd.exe /c start ms-settings:nightlight")
-                return
-            end
-
-            -- Focus Assist settings spawn
-            if lx >= 30 + btn_w and lx <= 30 + btn_w * 2 and ly >= 75 and ly <= 75 + btn_h then
-                HyprWin.cc_state.focus = not HyprWin.cc_state.focus
-                wm.spawn("cmd.exe /c start ms-settings:focusassist")
-                return
-            end
-
-            -- Volume Slider drag simulation (using native keystroke emulation)
-            if ly >= 150 and ly <= 185 then
-                local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
-                HyprWin.cc_state.volume = pct
-                local vol_steps = math.floor(pct * 50)
-                -- Mute then send exact percentage steps of volume-up key
-                wm.spawn("powershell -WindowStyle Hidden -Command \"$wsh = New-Object -ComObject Wscript.Shell; for ($i=0; $i -lt 50; $i++) { $wsh.SendKeys([char]174) }; for ($i=0; $i -lt " .. vol_steps .. "; $i++) { $wsh.SendKeys([char]175) }\"")
-                return
-            end
-
-            -- Brightness Slider calculation using native WMI
-            if ly >= 210 and ly <= 245 then
-                local pct = math.min(1.0, math.max(0.0, (lx - 20) / (cc_w - 40)))
-                HyprWin.cc_state.brightness = pct
-                wm.spawn("powershell -WindowStyle Hidden -Command \"(Get-WmiObject -Namespace root\\wmi -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, " .. math.floor(pct * 100) .. ")\"")
-                return
-            end
-
-            -- Power Off (Left bottom)
-            local py = cc_h - 55
-            local p_btn_h = 32
-
-            -- Precise Power Off click bounds (lx: 20..150, ly: 345..377)
-            if lx >= 20 and lx <= 150 and ly >= py and ly <= py + p_btn_h then
-                log("Power Button: Shutting down system...")
-                wm.spawn("shutdown /s /t 0")
-                return
-            end
-
-            -- Precise Reboot click bounds (lx: 170..300, ly: 345..377)
-            if lx >= 170 and lx <= 300 and ly >= py and ly <= py + p_btn_h then
-                log("Power Button: Rebooting system...")
-                wm.spawn("shutdown /r /t 0")
-                return
-            end
-
-            return -- Absorb other click events inside the CC box
-        end
-    end
-
-    -- --- 2. TOPBAR INTERACTION ---
-    local trigger_x = sw - 16 - 25
-    local trigger_y = 8
-    
-    if x >= trigger_x - 10 and x <= trigger_x + 30 and y >= trigger_y and y <= trigger_y + 30 then
-        require("control_center").toggle()
-        return
-    end
-    
-    -- Workspace buttons clicks
-    local bar_x = 16
-    local WS_OFFSET_X = 45
-    local WS_SPACING  = 30
-    for i = 1, 7 do
-        local wx = bar_x + WS_OFFSET_X + (i - 1) * WS_SPACING
-        if x >= wx - 5 and x <= wx + 25 then
-            HyprWin.switch_workspace(i)
-            return
-        end
-    end
-end
+-- УДАЛЕНО: весь код on_click (более 100 строк с control center логикой)
 
 HyprWin.on_alttab_action = function(action_type)
     alttab.action(action_type)

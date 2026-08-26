@@ -36,9 +36,8 @@ HWND g_overlay_hwnd = NULL;
 namespace fs = std::filesystem;
 std::vector<int> g_registered_hotkeys;
 
-Renderer g_topbar_renderer;   // For topbar rendering
+// УДАЛЕНО: topbar renderer и hwnd больше не нужны
 Renderer* g_current_renderer = nullptr; // Points to currently active renderer
-HWND g_topbar_hwnd = NULL;
 
 #define WM_HYPRWIN_IPC (WM_USER + 500)
 
@@ -120,31 +119,7 @@ static FILETIME g_prev_kernel_time = {0};
 static FILETIME g_prev_user_time = {0};
 
 LRESULT CALLBACK TopbarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  if (msg == WM_SETCURSOR) {
-    SetCursor(LoadCursor(NULL, IDC_ARROW));
-    return TRUE;
-  }
-
-  if (msg == WM_LBUTTONDOWN) {
-    int x = GET_X_LPARAM(lParam);
-    int y = GET_Y_LPARAM(lParam);
-
-    std::cout << "[C++ Topbar] Mouse click caught at X: " << x << " | Y: " << y << std::endl;
-
-    if (g_lua) {
-      // ИСПРАВЛЕНО: защищаем доступ к g_lua
-      std::lock_guard<std::mutex> lock(g_lua_mutex);
-
-      sol::protected_function click_func = (*g_lua)["HyprWin"]["on_click"];
-      if (click_func.valid()) {
-        auto result = click_func(x, y);
-        if (!result.valid()) {
-          sol::error err = result;
-          std::cerr << "!!! LUA CLICK ERROR: " << err.what() << std::endl;
-        }
-      }
-    }
-  }
+  // УДАЛЕНО: topbar больше не нужен
   return DefWindowProcA(hwnd, msg, wParam, lParam);
 }
 
@@ -524,25 +499,7 @@ int main() {
     wm.set_function("is_minimized",
                     [](size_t hwnd) { return (bool)IsIconic((HWND)hwnd); });
 
-     wm.set_function("set_cc_active", [](bool active) {
-      if (g_topbar_hwnd) {
-        int sw = GetSystemMetrics(SM_CXSCREEN);
-        HRGN hRgnBar = CreateRectRgn(0, 0, sw, 46);
-        if (active) {
-          int cc_x = sw - 320 - 16;
-          HRGN hRgnCC = CreateRectRgn(cc_x, 46, cc_x + 320, 446);
-          HRGN hRgnCombined = CreateRectRgn(0, 0, 0, 0);
-          
-          CombineRgn(hRgnCombined, hRgnBar, hRgnCC, RGN_OR);
-          SetWindowRgn(g_topbar_hwnd, hRgnCombined, TRUE);
-          
-          DeleteObject(hRgnBar);
-          DeleteObject(hRgnCC);
-        } else {
-          SetWindowRgn(g_topbar_hwnd, hRgnBar, TRUE);
-        }
-      }
-    });
+    // УДАЛЕНО: set_cc_active больше не нужна
 
     wm.set_function("enumerate_windows", []() {
       std::vector<size_t> hwnds;
@@ -636,43 +593,7 @@ int main() {
     SetWindowPos(overlay_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
 
-    // ==========================================
-    // --- ШАГ 5: СОЗДАНИЕ КЛИКАБЕЛЬНОГО ТОПБАРА ---
-    // ==========================================
-    WNDCLASSEXA wc_top = wc;
-    wc_top.lpszClassName = "HyprWinTopbar";
-    wc_top.lpfnWndProc = TopbarWndProc; // Наш клик-обработчик из Шага Б
-    RegisterClassExA(&wc_top);
-
-    // Высота 46 пикселей (30px сам бар + 8px маргин сверху + 8px запас снизу)
-    int topbar_height = 500;
-    HWND topbar_hwnd = CreateWindowExA(
-        WS_EX_TOPMOST | WS_EX_LAYERED, "HyprWinTopbar", // БЕЗ WS_EX_TRANSPARENT!
-        "Topbar", WS_POPUP, 0, 0, GetSystemMetrics(SM_CXSCREEN),
-        topbar_height, NULL, NULL, wc.hInstance, NULL);
-
-    g_topbar_hwnd = topbar_hwnd;
-
-    // Настраиваем прозрачность окна
-    SetLayeredWindowAttributes(topbar_hwnd, 0, 255, LWA_ALPHA);
-    DwmExtendFrameIntoClientArea(topbar_hwnd, &margins);
-
-    // Инициализируем рендерер под новое окно топбара
-    if (!g_topbar_renderer.init(topbar_hwnd)) {
-      std::cerr << "HyprWin: Failed to initialize Topbar Renderer!" << std::endl;
-      return -1;
-    }
-
-    // Показываем окно топбара, но без перехвата фокуса (чтобы не сбивать активные окна)
-    ShowWindow(topbar_hwnd, SW_SHOWNOACTIVATE);
-
-    // Вытаскиваем топбар на самый верх Z-стопки, чтобы полноэкранный оверлей не воровал клики!
-    SetWindowPos(topbar_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-
-    int sw_screen = GetSystemMetrics(SM_CXSCREEN);
-    HRGN hRgnStart = CreateRectRgn(0, 0, sw_screen, 46);
-    SetWindowRgn(topbar_hwnd, hRgnStart, TRUE);
+    // УДАЛЕНО: весь код создания topbar окна (более 40 строк)
 
     char buffer[MAX_PATH];
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
@@ -848,27 +769,7 @@ int main() {
         g_renderer.end_draw();
       }
 
-      if (IsWindowVisible(g_topbar_hwnd)) {
-        g_current_renderer = &g_topbar_renderer;
-        g_topbar_renderer.begin_draw();
-        g_topbar_renderer.clear(0, 0, 0, 0);
-
-        if (g_lua) {
-          // ИСПРАВЛЕНО: защищаем доступ к g_lua
-          std::lock_guard<std::mutex> lock(g_lua_mutex);
-
-          sol::protected_function render_topbar = lua["HyprWin"]["on_render_topbar"];
-          if (render_topbar.valid()) {
-            auto result = render_topbar();
-            if (!result.valid()) {
-              sol::error err = result;
-              std::cerr << "!!! LUA TOPBAR RENDER ERROR: " << err.what() << std::endl;
-            }
-          }
-        }
-
-        g_topbar_renderer.end_draw();
-      }
+      // УДАЛЕНО: весь код рендеринга топбара
     }
 
     // Unregister all hotkeys on clean exit

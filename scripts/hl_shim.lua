@@ -16,6 +16,10 @@ HyprWin.curves = {}
 HyprWin.animations = {}
 HyprWin.monitors = {}
 
+-- НОВОЕ: Submap поддержка для многоуровневых биндов
+HyprWin.current_submap = "default"
+HyprWin.submaps = { default = {} }
+
 -- Hex parser supporting both #RRGGBBAA and #RRGGBB
 local function parse_rgba_string(str)
     if not str then return nil end
@@ -329,7 +333,48 @@ hl.dsp = {
                 HyprWin.retile()
             end
         end
-    end
+    end,
+    -- НОВОЕ: Dispatchers для window groups
+    group = {
+        new = function()
+            return function()
+                if create_group then create_group() end
+            end
+        end,
+        add = function()
+            return function()
+                if add_to_group then add_to_group() end
+            end
+        end,
+        remove = function()
+            return function()
+                if remove_from_group then remove_from_group() end
+            end
+        end,
+        toggle = function()
+            return function()
+                -- Toggle between creating and removing from group
+                local focused = HyprWin.focused_window
+                if not focused then return end
+
+                if HyprWin.window_to_group[focused] then
+                    if remove_from_group then remove_from_group() end
+                else
+                    if add_to_group then add_to_group() end
+                end
+            end
+        end,
+        cycle_next = function()
+            return function()
+                if cycle_group then cycle_group("next") end
+            end
+        end,
+        cycle_prev = function()
+            return function()
+                if cycle_group then cycle_group("prev") end
+            end
+        end
+    }
 }
 
 hl.bind = function(combo, action, opts)
@@ -338,6 +383,20 @@ hl.bind = function(combo, action, opts)
 
     HyprWin.custom_hotkey_counter = HyprWin.custom_hotkey_counter + 1
     local id = HyprWin.custom_hotkey_counter + 1000
+
+    -- НОВОЕ: сохраняем в текущий submap
+    local submap = HyprWin.current_submap or "default"
+    if not HyprWin.submaps[submap] then
+        HyprWin.submaps[submap] = {}
+    end
+
+    HyprWin.submaps[submap][id] = action
     HyprWin.custom_hotkeys[id] = action
     wm.register_hotkey(id, mod, vk)
+end
+
+-- НОВОЕ: Переключение между submaps
+hl.submap = function(name)
+    HyprWin.current_submap = name or "default"
+    log("Switched to submap: " .. HyprWin.current_submap)
 end
