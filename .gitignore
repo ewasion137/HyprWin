@@ -1,0 +1,17 @@
+build/
+bin/
+out/
+.vs/
+*.user
+*.suo
+*.VC.db
+*.sln.docstates
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.dll
+*.exe
+CMakeFiles/
+CMakeCache.txt
+/build/
