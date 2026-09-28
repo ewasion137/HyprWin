@@ -1,12 +1,12 @@
-# Collect all source and header files recursively
-file(GLOB_RECURSE CORE_SOURCES "src/*.cpp")
-file(GLOB_RECURSE CORE_HEADERS "include/*.hpp")
+add_library(core_lib STATIC
+    src/renderer.cpp
+    src/alttab.cpp
+)
 
-# Remove main.cpp from library sources to avoid double-definition (it's used in root)
-list(REMOVE_ITEM CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+target_include_directories(core_lib PUBLIC 
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/lua
+)
 
-# Define the core library with all found files
-add_library(core_lib STATIC ${CORE_SOURCES} ${CORE_HEADERS})
-
-# Link headers
-target_include_directories(core_lib PUBLIC include)
+target_link_libraries(core_lib PUBLIC d2d1 dwrite dwmapi user32)

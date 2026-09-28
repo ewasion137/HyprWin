@@ -363,14 +363,12 @@ end
 HyprWin.update_opacities = function()
     local t = HyprWin.theme
     if not t.active_opacity or not t.inactive_opacity then return end
-
-    local fg = wm.get_foreground_window()
-    local active = HyprWin.focused_window or fg
-
+    
     for _, hwnd in ipairs(HyprWin.windows) do
         local class = wm.get_class_name(hwnd)
+        -- Пропускаем наши системные окна оверлея и топбара, чтобы случайно их не загасить
         if class ~= "HyprWinOverlay" and class ~= "HyprWinTopbar" then
-            if hwnd == active or hwnd == fg then
+            if hwnd == HyprWin.focused_window then
                 wm.set_window_opacity(hwnd, t.active_opacity)
             else
                 wm.set_window_opacity(hwnd, t.inactive_opacity)
@@ -472,8 +470,6 @@ HyprWin.dispatch_event = function(event_type, hwnd, title)
             table.insert(HyprWin.windows, hwnd)
             HyprWin.window_workspaces[hwnd] = HyprWin.current_workspace
             HyprWin.retile()
-        else
-            HyprWin.update_opacities()
         end
         return
     end

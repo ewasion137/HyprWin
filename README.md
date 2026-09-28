@@ -1,85 +1,123 @@
 # HyprWin
 
-A tiled window manager for Windows inspired by Hyprland, utilizing a dual-window C++ core with Direct2D rendering and a modular Lua configuration system.
-
-## Technical Architecture
-
-### 1. Rendering & Click-Through (Dual HWND Pipeline)
-To bypass Windows Desktop Window Manager (DWM) pointer input limitations while maintaining a smooth desktop overlay, the application runs two separate top-level windows:
-* **Overlay Window (`g_overlay_hwnd`)**: Fullscreen, non-interactive, and marked as `WS_EX_TRANSPARENT`. This window handles drawing active/inactive window borders and the application launcher. Clicks pass natively to background applications.
-* **Topbar Window (`g_topbar_hwnd`)**: A topmost layered window restricted to the top of the viewport. Rather than using permanent click-through flags, it utilizes dynamic GDI regions (`SetWindowRgn`). The window boundaries are programmatically reshaped in real-time. When the settings menu is toggled, the boundary extends to capture input; when closed, it collapses back to a thin horizontal strip. Areas with an alpha of zero outside these regions allow input to reach underlying processes across separate threads.
-
-### 2. Event Hooks & Layout Tracking
-* **WinEvents**: Employs out-of-context event hooks (`SetWinEventHook`) to monitor global window state changes:
-  * `EVENT_SYSTEM_FOREGROUND`: Tracks active window focus changes.
-  * `EVENT_OBJECT_CREATE` / `EVENT_OBJECT_DESTROY`: Detects application window lifecycles.
-  * `EVENT_SYSTEM_MINIMIZESTART` / `EVENT_SYSTEM_MINIMIZEEND`: Evaluates window state adjustments to exclude minimized targets from tiling calculations.
-* **Low-Level Keyboard Hook**: Implements a dedicated keyboard hook (`WH_KEYBOARD_LL`) to intercept `Alt+Tab` key combos. Default Windows task-switching dialogs are blocked, and control is routed directly to a custom, real-time scaled window switcher handled in Lua.
-
-### 3. Named Pipe IPC Server
-The C++ core spawns a detached secondary thread hosting a multithreaded Named Pipe server listening on `\\.\pipe\hyprwin`. 
-* Communication is handled via `ReadFile` and `WriteFile`.
-* Commands (such as layout modifications, focus switches, and window lists) are passed down via custom `WM_HYPRWIN_IPC` window messages to the main thread's message queue, keeping thread-safety intact during Lua state execution.
-
-### 4. Lua Execution Layer
-The C++ application registers Win32 APIs, GDI functions, and Direct2D/DirectWrite rendering wrappers into the Lua state via `sol2`. Window movement, workspaces transitions (quadratic ease-out animations), and layout algorithms (such as Binary Space Partitioning and Master-stack) are computed directly in Lua on every frame delta.
+Dynamic tiling window manager for Windows made with C++ and Lua. Made to support original Hyprland configs as much as it can. In active development
 
 ---
 
-## Build Instructions
+## Architecture
 
-### Prerequisites
-* Windows 10/11 SDK (10.0.19041.0 or higher)
-* MSVC Compiler Toolset (Visual Studio 2022 recommended)
-* CMake (Version 3.20 or higher)
-* Lua 5.4 Development Libraries
+### 1. Window Management
+* Layout positioning queries `DWMWA_EXTENDED_FRAME_BOUNDS` through `DwmGetWindowAttribute` to negate invisible DWM drop shadows and show exact visible boundaries.
+* Off-workspace applications are hidden using coordinate offsets (`-32000, -32000`) and checked `DWMWA_CLOAKED` to filter out UWP background and virtual desktop stubs.
 
-### Building the Project
-Clone the repository and run the following commands in your terminal:
+### 2. Events
+* Global hooks (`SetWinEventHook`) capture events without DLL injection:
+  * `EVENT_OBJECT_CREATE` / `EVENT_OBJECT_DESTROY`
+  * `EVENT_SYSTEM_FOREGROUND`
+  * `EVENT_SYSTEM_MINIMIZESTART` / `EVENT_SYSTEM_MINIMIZEEND`
+* A hook (`WH_KEYBOARD_LL`) catches `Alt+Tab` key and switches state updates directly to the Lua task switcher in the HyprWin.
 
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+### 3. States & Animations
+* Lua 5.4 through sol2.
+* Uses Binary Space Partitioning (BSP) and Master layouts.
+
+### 4. IPC Architecture
+* Has a dedicated worker thread running a Named Pipe endpoint at `\\.\pipe\hyprwin`.
+* Requests are synchronized throuth the `WM_HYPRWIN_IPC` to prevent concurrent access to Lua engine.
+
+---
+
+## Dependencies
+
+* Windows 10/11 x86_64
+* MSVC v143+
+* CMake 3.20+
+* Windows SDK
+
+---
+
+## Build
+
+```cmd
+git clone https://github.com/ewasion137/HyprWin.git
+cd HyprWin
+cmake -B build -A x64
+cmake --build build --config Release
 ```
 
-The output executable and asset structure will be compiled inside the `build/Release` folder.
+Output and the compiled application will lay in `build/Release/`.
 
 ---
 
 ## Configuration
 
-On initial execution, a directory is created at `%USERPROFILE%/.hyprwin/`. Edit `%USERPROFILE%/.hyprwin/hyprland.lua` to configure variables, monitors, workspace rules, custom key combinations, and animations.
+Configuration is loaded from `%USERPROFILE%\.hyprwin\hyprland.lua`. If does'nt, a template is created on initial launch.
 
 ```lua
--- Sample configuration block in %USERPROFILE%/.hyprwin/hyprland.lua
 hl.config({
-  general = {
-    gaps_in = 6,
-    gaps_out = 12,
-    col = {
-      active_border = "rgba(bb9af7ff)",
-      inactive_border = "rgba(1a1b26ff)"
+    general = {
+        gaps_in = 6,
+        gaps_out = 12,
+        border_size = 2,
+        layout = "bsp",
+        col = {
+            active_border = "rgba(7aa2f7ff)",
+            inactive_border = "rgba(1a1b26aa)"
+        }
     },
-    layout = "bsp"
-  }
+    decoration = {
+        rounding = 8
+    },
+    animations = {
+        enabled = true
+    }
 })
+
+-- Keybindings: Modifier + Key
+hl.bind("ALT + RETURN", hl.dsp.exec_cmd("cmd.exe"))
+hl.bind("ALT + Q",      hl.dsp.window.close())
+hl.bind("ALT + SPACE",  hl.dsp.window.float())
+
+-- Workspaces
+for i = 1, 9 do
+    hl.bind("ALT + " .. i, hl.dsp.workspace(tostring(i)))
+    hl.bind("ALT + SHIFT + " .. i, hl.dsp.movetoworkspace(tostring(i)))
+end
 ```
 
 ---
 
-## IPC Protocol
+## IPC
 
-You can interact with `HyprWin` externally by writing raw string data to the pipe endpoint: `\\.\pipe\hyprwin`.
+The Named Pipe server accepts newline-delimited ASCII commands at `\\.\pipe\hyprwin`.
 
-### Supported Commands
-* `dispatch <dispatcher> <args>`: Executes layout controls (e.g., `dispatch workspace 2`, `dispatch togglefloating`, `dispatch killactive`).
-* `activewindow`: Returns the focused window handle, class name, and title.
-* `clients`: Outputs a list of all tracked, tiled, and floating window handles on the current layout.
+### Dispatchers
+
+| Command | Arguments | Description |
+| :--- | :--- | :--- |
+| `dispatch workspace` | `<index>` | Focus specified workspace |
+| `dispatch movetoworkspace` | `<index>` | Move active window to workspace |
+| `dispatch exec` | `<path>` | Execute process |
+| `dispatch togglefloating` | — | Toggle floating state for active window |
+| `dispatch killactive` | — | Kill active window |
+| `dispatch movefocus` | `left` \| `right` \| `up` \| `down` | Shift focus directionally |
+| `dispatch swapwindow` | `left` \| `right` \| `up` \| `down` | Swap window positions |
+
+### System Queries
+
+| Command | Description | Response Format |
+| :--- | :--- | :--- |
+| `activewindow` | Retreive handle and title of focused client | `HWND: 0x... \n Class: ... \n Title: ...` |
+| `clients` | Enumerate all tracked windows across layouts | List of registered window descriptors |
+| `setprop` | `<HWND/activewindow> opacity <0.1-1.0>` | Mutate Win32 alpha layered attributes |
+
+### Usage with PowerShell
+
+```powershell
+.\hyprctl.ps1 "dispatch workspace 2"
+.\hyprctl.ps1 "activewindow"
+```
 
 ---
 
-## License
-
-This project is licensed under the terms of the GNU General Public License v2 (GPLv2). See the `LICENSE` file for details.
+*HyprWin is in active development and is a project build with help of AI, it's raw and buggy, ill be happy for you to write in the issues your suggestions to improve, found bugs or even contribute to it! I allow AI to contribute to the project, as is the project is made using AI, but make sure all works and all tested and nothing else breaks. * 
